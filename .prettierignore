@@ -1,0 +1,6 @@
+main.js
+node_modules/
+eval/results/
+scripts/data/
+demo-vault/
+package-lock.json

@@ -1,0 +1,10 @@
+{
+  "id": "vaultseek",
+  "name": "VaultSeek",
+  "version": "1.0.0",
+  "minAppVersion": "1.9.0",
+  "description": "Local-first semantic search and cited Q&A across your vault. Embedding and retrieval run fully on-device — no server, no data leaves your machine by default.",
+  "author": "Celia Domínguez",
+  "authorUrl": "https://github.com/celiadominguez",
+  "isDesktopOnly": true
+}

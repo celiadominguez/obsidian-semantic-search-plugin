@@ -1,0 +1,8 @@
+---
+id: "2099400"
+title: "Helicobacter pylori induces AGS cell motility and elongation via independent signaling pathways."
+source: "BeIR/SciFact"
+---
+# Helicobacter pylori induces AGS cell motility and elongation via independent signaling pathways.
+
+Helicobacter pylori induces motogenic and cytoskeletal responses in gastric epithelial cells. We demonstrate that these responses can be induced via independent signaling pathways that often occur in parallel. The cag pathogenicity island appears to be nonessential for induction of motility, whereas the elongation phenotype depends on translocation and phosphorylation of CagA.

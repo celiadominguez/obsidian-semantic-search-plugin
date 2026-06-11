@@ -1,0 +1,8 @@
+---
+id: "2352142"
+title: "Cerebral perfusion and stroke."
+source: "BeIR/SciFact"
+---
+# Cerebral perfusion and stroke.
+
+Stroke is a heterogeneous syndrome caused by multiple disease mechanisms, but all result in a disruption of cerebral blood flow with subsequent tissue damage. This review covers the mechanisms responsible for regulation of the normal cerebral circulation, and how they are disrupted in disease states. A central concept in treating patients with acute ischaemic stroke is the existence of an ischaemic penumbra of potentially salvageable tissue, and the evidence for its existence in humans is reviewed.

@@ -1,0 +1,134 @@
+/*
+ * VaultSeek styles. All colors derive from Obsidian theme variables so the view
+ * adapts to light/dark and custom themes without hard-coded values.
+ */
+
+.vaultseek-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: var(--size-4-2);
+  padding: var(--size-4-2);
+}
+
+.vaultseek-search-row {
+  display: flex;
+  gap: var(--size-4-1);
+  align-items: center;
+}
+
+.vaultseek-search-input {
+  flex: 1;
+}
+
+.vaultseek-status {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  min-height: 1.2em;
+}
+
+.vaultseek-progress {
+  height: 4px;
+  border-radius: var(--radius-s);
+  background: var(--background-modifier-border);
+  overflow: hidden;
+}
+
+.vaultseek-progress-bar {
+  height: 100%;
+  width: 0;
+  background: var(--interactive-accent);
+  transition: width 120ms ease-out;
+}
+
+.vaultseek-results {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+}
+
+.vaultseek-result {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: var(--size-4-2);
+  cursor: pointer;
+  background: var(--background-secondary);
+}
+
+.vaultseek-result:hover {
+  border-color: var(--interactive-accent);
+}
+
+.vaultseek-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--size-4-2);
+}
+
+.vaultseek-result-title {
+  font-weight: var(--font-semibold);
+  color: var(--text-normal);
+}
+
+.vaultseek-result-score {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.vaultseek-result-snippet {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  margin-top: var(--size-4-1);
+  line-height: 1.4;
+}
+
+.vaultseek-result-actions {
+  display: flex;
+  gap: var(--size-4-2);
+  margin-top: var(--size-4-1);
+}
+
+.vaultseek-result-action {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-accent);
+  cursor: pointer;
+}
+
+.vaultseek-result-action:hover {
+  text-decoration: underline;
+}
+
+.vaultseek-qa {
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: var(--size-4-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+}
+
+.vaultseek-qa-answer {
+  background: var(--background-secondary);
+  border-radius: var(--radius-m);
+  padding: var(--size-4-2);
+  line-height: 1.5;
+}
+
+.vaultseek-qa-answer.is-refusal {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.vaultseek-qa-citations {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+
+.vaultseek-empty {
+  color: var(--text-faint);
+  text-align: center;
+  margin-top: var(--size-4-8);
+}

@@ -1,0 +1,8 @@
+---
+id: "599582"
+title: "Familial aphasic episodes: another variant of partial epilepsy with simple inheritance?"
+source: "BeIR/SciFact"
+---
+# Familial aphasic episodes: another variant of partial epilepsy with simple inheritance?
+
+We report on a family having partial epilepsy with simple inheritance. The affected members commonly have aphasic episodes with secondary generalization; onset occurred either in adolescence or adulthood. Patients' response to medication has varied greatly. No neurological defects or decline in intelligence were found. The case represents another variety of rare familial partial epilepsy with neocortical epilepsy features.

@@ -1,0 +1,45 @@
+{
+  "name": "vaultseek",
+  "version": "1.0.0",
+  "description": "Local-first semantic search and cited Q&A across an Obsidian vault, with embedding and retrieval running fully on-device.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Celia Domínguez",
+  "keywords": [
+    "obsidian",
+    "obsidian-plugin",
+    "semantic-search",
+    "embeddings",
+    "local-first",
+    "transformers"
+  ],
+  "scripts": {
+    "build": "node esbuild.config.mjs production",
+    "dev": "node esbuild.config.mjs",
+    "eval": "tsx eval/run_eval.ts",
+    "build-demo-vault": "tsx scripts/build_demo_vault.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.4",
+    "@types/node": "22.20.0",
+    "@typescript-eslint/eslint-plugin": "8.62.0",
+    "@typescript-eslint/parser": "8.62.0",
+    "esbuild": "0.28.1",
+    "eslint": "9.39.4",
+    "obsidian": "1.13.1",
+    "prettier": "3.8.4",
+    "tsx": "4.22.4",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.62.0",
+    "vitest": "4.1.9"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "4.2.0",
+    "hnswlib-wasm": "0.8.2"
+  }
+}
