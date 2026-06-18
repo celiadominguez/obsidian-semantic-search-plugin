@@ -1,14 +1,14 @@
 /**
- * The VaultSeek sidebar view: a search box and ranked results with previews and
- * per-result actions (open in split, insert as link, copy citation). All
- * retrieval work is delegated to `IndexService`; this file is thin presentation
- * glue over Obsidian's `ItemView`.
+ * The VaultSeek sidebar view: a search box, ranked results with previews and
+ * per-result actions (open in split, insert as link, copy citation), and a
+ * cited Q&A panel. All retrieval and Q&A work is delegated to `IndexService`;
+ * this file is thin presentation glue over Obsidian's `ItemView`.
  */
 
-import { ItemView, Notice, TFile, type WorkspaceLeaf } from "obsidian";
+import { ItemView, MarkdownRenderer, Notice, TFile, type WorkspaceLeaf } from "obsidian";
 import { DEFAULT_TOP_K } from "../core/config";
 import { noteBasename } from "../core/notePath";
-import type { SearchResult } from "../core/types";
+import type { QaResult, SearchResult } from "../core/types";
 import type { IndexService } from "./indexService";
 
 /** Stable view type id used to register and reveal the view. */
@@ -19,6 +19,7 @@ export class SearchView extends ItemView {
   private searchInput!: HTMLInputElement;
   private statusEl!: HTMLElement;
   private resultsEl!: HTMLElement;
+  private qaEl!: HTMLElement;
   private debounceTimer: number | null = null;
 
   constructor(leaf: WorkspaceLeaf, index: IndexService) {
@@ -48,11 +49,19 @@ export class SearchView extends ItemView {
       cls: "vaultseek-search-input",
       attr: { type: "text", placeholder: "Search your vault by meaning…" },
     });
+    const askButton = searchRow.createEl("button", { text: "Ask" });
 
     this.statusEl = container.createDiv({ cls: "vaultseek-status" });
     this.resultsEl = container.createDiv({ cls: "vaultseek-results" });
+    this.qaEl = container.createDiv({ cls: "vaultseek-qa" });
 
     this.searchInput.addEventListener("input", () => this.scheduleSearch());
+    this.searchInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        void this.runQuestion();
+      }
+    });
+    askButton.addEventListener("click", () => void this.runQuestion());
 
     this.renderEmptyState();
   }
@@ -83,12 +92,13 @@ export class SearchView extends ItemView {
     this.resultsEl.empty();
     this.resultsEl.createDiv({
       cls: "vaultseek-empty",
-      text: "Type to search your vault semantically.",
+      text: "Type to search semantically, or press Enter / Ask for a cited answer.",
     });
   }
 
   private async runSearch(): Promise<void> {
     const query = this.searchInput.value.trim();
+    this.qaEl.empty();
     if (query.length === 0) {
       this.renderEmptyState();
       this.statusEl.setText("");
@@ -139,6 +149,35 @@ export class SearchView extends ItemView {
       event.stopPropagation();
       handler();
     });
+  }
+
+  private async runQuestion(): Promise<void> {
+    const question = this.searchInput.value.trim();
+    if (question.length === 0) {
+      return;
+    }
+    await this.runSearch();
+    this.qaEl.empty();
+    this.qaEl.createEl("h4", { text: "Answer" });
+    const answerEl = this.qaEl.createDiv({ cls: "vaultseek-qa-answer" });
+    answerEl.setText("Thinking…");
+
+    let result: QaResult;
+    try {
+      result = await this.index.answer(question);
+    } catch (error) {
+      answerEl.setText(error instanceof Error ? error.message : String(error));
+      return;
+    }
+
+    answerEl.empty();
+    answerEl.toggleClass("is-refusal", result.refused);
+    await MarkdownRenderer.render(this.app, result.answer, answerEl, "", this);
+
+    if (result.citations.length > 0) {
+      const cites = this.qaEl.createDiv({ cls: "vaultseek-qa-citations" });
+      cites.setText(`Sources: ${result.citations.map((path) => noteBasename(path)).join(", ")}`);
+    }
   }
 
   private getFile(path: string): TFile | null {

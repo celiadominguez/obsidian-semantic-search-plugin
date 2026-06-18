@@ -14,10 +14,11 @@ import { defaultSettings } from "./core/config";
 import type { VaultSeekSettings } from "./core/types";
 import { IndexService } from "./obsidian/indexService";
 import { SearchView, VAULTSEEK_VIEW_TYPE } from "./obsidian/SearchView";
+import { SettingsTab, type SettingsHost } from "./obsidian/SettingsTab";
 
 const DEFAULT_PLUGIN_DIR = ".obsidian/plugins/vaultseek";
 
-export default class VaultSeekPlugin extends Plugin {
+export default class VaultSeekPlugin extends Plugin implements SettingsHost {
   public settings: VaultSeekSettings = defaultSettings();
   private index!: IndexService;
   private statusBar!: HTMLElement;
@@ -45,6 +46,8 @@ export default class VaultSeekPlugin extends Plugin {
       name: "Re-index vault",
       callback: () => void this.requestReindex(),
     });
+
+    this.addSettingTab(new SettingsTab(this));
 
     this.statusBar = this.addStatusBarItem();
 

@@ -16,6 +16,7 @@ import { EMBED_BATCH_SIZE } from "../core/config";
 import { chunkNote } from "../core/chunker";
 import { hashText } from "../core/hash";
 import { rank } from "../core/hybridRanker";
+import { QaEngine, createGenerator } from "../core/qa";
 import { Bm25Index } from "../core/bm25";
 import { VectorStore, type VectorSidecar } from "../core/vectorStore";
 import { WorkerEmbedder } from "../worker/workerEmbedder";
@@ -24,6 +25,7 @@ import type {
   Chunk,
   Embedder,
   NoteInput,
+  QaResult,
   RankingMode,
   SearchResult,
   VaultSeekSettings,
@@ -269,6 +271,18 @@ export class IndexService {
       mode,
       topK,
     });
+  }
+
+  /** Answer a question with cited Q&A using the configured generation backend. */
+  public async answer(question: string): Promise<QaResult> {
+    const engine = new QaEngine({
+      embedder: this.embedder,
+      store: this.store,
+      bm25: this.bm25,
+      generator: createGenerator(this.settings),
+      alpha: this.settings.hybridAlpha,
+    });
+    return engine.answer(question);
   }
 
   /** Current index statistics. */
