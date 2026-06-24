@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { blend, normalizeScores, rank } from "../src/core/hybridRanker";
-import { HashingEmbedder } from "../src/core/embedder";
+import { HashingEmbedder, l2Normalize } from "../src/core/embedder";
 import { Bm25Index } from "../src/core/bm25";
 import { VectorStore } from "../src/core/vectorStore";
 import { hashText } from "../src/core/hash";
-import type { Chunk } from "../src/core/types";
+import type { Chunk, Embedder } from "../src/core/types";
 
 describe("normalizeScores", () => {
   it("min-max normalizes into [0, 1]", () => {
@@ -97,6 +97,42 @@ describe("rank integration", () => {
       expect(results[0].chunk.notePath, `mode=${mode}`).toBe("caffeine.md");
       expect(results[0].snippet.length).toBeGreaterThan(0);
     }
+  });
+
+  it("prepends the query instruction to the embedded query but not to BM25", async () => {
+    // Records exactly what text the embedder receives.
+    class RecordingEmbedder implements Embedder {
+      public readonly dim = 8;
+      public readonly modelId = "recording";
+      public readonly seen: string[] = [];
+      public async embed(texts: string[]): Promise<Float32Array[]> {
+        this.seen.push(...texts);
+        return texts.map(() => l2Normalize(new Float32Array(this.dim).fill(1)));
+      }
+    }
+    const embedder = new RecordingEmbedder();
+    const store = new VectorStore({ dim: 8, modelId: embedder.modelId, hnswThreshold: 1000 });
+    const bm25 = new Bm25Index();
+    const c = chunk("c0", "n.md", "alpha beta");
+    const [vec] = await embedder.embed(["alpha beta"]);
+    store.upsert({ chunk: c, hash: hashText(c.text), vector: vec });
+    bm25.add(c.id, c.text);
+    embedder.seen.length = 0;
+
+    await rank({
+      query: "alpha",
+      embedder,
+      store,
+      bm25,
+      alpha: 0.6,
+      mode: "hybrid",
+      topK: 1,
+      queryInstruction: "PREFIX: ",
+    });
+    // The embedded query carries the instruction…
+    expect(embedder.seen).toContain("PREFIX: alpha");
+    // …and BM25 still matches the raw term (no leakage into lexical scoring).
+    expect(bm25.search("alpha", 1)).toHaveLength(1);
   });
 
   it("populates both signal scores in hybrid mode", async () => {

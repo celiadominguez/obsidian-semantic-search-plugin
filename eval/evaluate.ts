@@ -135,6 +135,7 @@ export async function evaluateRanking(
   mode: RankingMode,
   alpha: number,
   pool: number,
+  queryInstruction = "",
 ): Promise<MetricRow> {
   let ndcg = 0;
   let recall = 0;
@@ -148,6 +149,7 @@ export async function evaluateRanking(
       alpha,
       mode,
       topK: pool,
+      queryInstruction,
     });
     const ranked = toNoteRanking(results);
     ndcg += ndcgAtK(ranked, relevant, CUTOFF);
@@ -165,11 +167,21 @@ export async function evaluateAllModes(
   qrels: Qrel[],
   alpha: number,
   pool: number,
+  queryInstruction = "",
 ): Promise<Record<RankingMode, MetricRow>> {
   const modes: RankingMode[] = ["semantic", "lexical", "hybrid"];
   const ranking = {} as Record<RankingMode, MetricRow>;
   for (const mode of modes) {
-    ranking[mode] = await evaluateRanking(embedder, store, bm25, qrels, mode, alpha, pool);
+    ranking[mode] = await evaluateRanking(
+      embedder,
+      store,
+      bm25,
+      qrels,
+      mode,
+      alpha,
+      pool,
+      queryInstruction,
+    );
   }
   return ranking;
 }
@@ -178,12 +190,13 @@ export async function evaluateAllModes(
 export async function groundingCheck(
   embedder: Embedder,
   entries: WikiQaEntry[],
+  queryInstruction = "",
 ): Promise<GroundingResult> {
   let correct = 0;
   let reciprocalRankSum = 0;
   for (const entry of entries) {
     const positives = new Set(entry.answers);
-    const [questionVec] = await embedder.embed([entry.question]);
+    const [questionVec] = await embedder.embed([`${queryInstruction}${entry.question}`]);
     const candidateVecs = await embedder.embed(entry.candidates);
     const ranked = entry.candidates
       .map((candidate, i) => ({

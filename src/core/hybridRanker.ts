@@ -91,6 +91,12 @@ export interface RankOptions {
   alpha: number;
   mode: RankingMode;
   topK: number;
+  /**
+   * Optional instruction prepended to the query before embedding (used by
+   * asymmetric models like BGE). Lexical (BM25) matching always uses the raw
+   * query, so the instruction never leaks into term matching.
+   */
+  queryInstruction?: string;
 }
 
 /**
@@ -99,12 +105,13 @@ export interface RankOptions {
  * @returns Up to `topK` results ordered by the mode's score, highest first.
  */
 export async function rank(options: RankOptions): Promise<SearchResult[]> {
-  const { query, embedder, store, bm25, alpha, mode, topK } = options;
+  const { query, embedder, store, bm25, alpha, mode, topK, queryInstruction } = options;
   const poolSize = Math.max(topK * POOL_FACTOR, MIN_POOL);
 
   const semantic = new Map<string, number>();
   if (mode !== "lexical") {
-    const [queryVector] = await embedder.embed([query]);
+    const embeddedQuery = `${queryInstruction ?? ""}${query}`;
+    const [queryVector] = await embedder.embed([embeddedQuery]);
     for (const hit of await store.search(queryVector, poolSize)) {
       semantic.set(hit.id, hit.score);
     }

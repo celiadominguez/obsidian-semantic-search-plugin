@@ -17,10 +17,12 @@ import { chunkNote } from "../core/chunker";
 import { hashText } from "../core/hash";
 import { rank } from "../core/hybridRanker";
 import { QaEngine, createGenerator } from "../core/qa";
+import { ChatEngine } from "../core/chat";
 import { Bm25Index } from "../core/bm25";
+import { obsidianHttpClient } from "./obsidianHttp";
 import { VectorStore, type VectorSidecar } from "../core/vectorStore";
 import { WorkerEmbedder } from "../worker/workerEmbedder";
-import { EMBEDDING_MODELS } from "../core/config";
+import { EMBEDDING_MODELS, type EmbeddingModelInfo } from "../core/config";
 import type {
   Chunk,
   Embedder,
@@ -260,6 +262,11 @@ export class IndexService {
     }
   }
 
+  /** Per-model retrieval configuration (query instruction + refusal floor). */
+  private modelInfo(): EmbeddingModelInfo {
+    return EMBEDDING_MODELS[this.settings.embeddingModel];
+  }
+
   /** Run a ranked search in the requested mode. */
   public async search(query: string, mode: RankingMode, topK: number): Promise<SearchResult[]> {
     return rank({
@@ -270,6 +277,7 @@ export class IndexService {
       alpha: this.settings.hybridAlpha,
       mode,
       topK,
+      queryInstruction: this.modelInfo().queryInstruction,
     });
   }
 
@@ -279,10 +287,46 @@ export class IndexService {
       embedder: this.embedder,
       store: this.store,
       bm25: this.bm25,
-      generator: createGenerator(this.settings),
+      generator: createGenerator(this.settings, obsidianHttpClient),
       alpha: this.settings.hybridAlpha,
+      similarityFloor: this.modelInfo().similarityFloor,
+      queryInstruction: this.modelInfo().queryInstruction,
     });
     return engine.answer(question);
+  }
+
+  /** Create a fresh multi-turn chat engine bound to the current index and settings. */
+  public createChatEngine(): ChatEngine {
+    return new ChatEngine({
+      embedder: this.embedder,
+      store: this.store,
+      bm25: this.bm25,
+      generator: createGenerator(this.settings, obsidianHttpClient),
+      alpha: this.settings.hybridAlpha,
+      similarityFloor: this.modelInfo().similarityFloor,
+      queryInstruction: this.modelInfo().queryInstruction,
+    });
+  }
+
+  /** Whether a generative backend is configured (chat replies synthesize vs extract). */
+  public get hasGenerativeBackend(): boolean {
+    return this.settings.generationBackend !== "none";
+  }
+
+  /** Human-readable summary of the active answer model, for the chat header. */
+  public get generationSummary(): string {
+    const s = this.settings;
+    switch (s.generationBackend) {
+      case "ollama":
+        return `Ollama · ${s.ollamaModel || "no model set"}`;
+      case "lmstudio":
+        return `LM Studio · ${s.lmstudioModel || "no model set"}`;
+      case "hosted":
+        return `Hosted · ${s.hostedModel || "no model set"}`;
+      case "none":
+      default:
+        return "Retrieval-only (offline, no model)";
+    }
   }
 
   /** Current index statistics. */

@@ -8,7 +8,7 @@
 export type EmbeddingModelId = "Xenova/bge-small-en-v1.5" | "Xenova/all-MiniLM-L6-v2";
 
 /** Q&A generation backend selector. */
-export type GenerationBackend = "none" | "ollama" | "hosted";
+export type GenerationBackend = "none" | "ollama" | "lmstudio" | "hosted";
 
 /** Persisted, user-facing configuration. Every key has a default (see config.ts). */
 export interface VaultSeekSettings {
@@ -21,6 +21,8 @@ export interface VaultSeekSettings {
   generationBackend: GenerationBackend;
   ollamaEndpoint: string;
   ollamaModel: string;
+  lmstudioEndpoint: string;
+  lmstudioModel: string;
   hostedApiKey: string;
   hostedEndpoint: string;
   hostedModel: string;
@@ -104,6 +106,23 @@ export interface IndexMetadata {
   dim: number;
   /** Number of vectors in the blob. */
   count: number;
+}
+
+/** One message in a chat conversation. */
+export interface ChatMessage {
+  role: "user" | "assistant";
+  /** Message text; assistant messages may contain inline `[[note]]` citations. */
+  content: string;
+  /** Note paths cited by an assistant message (empty for user messages). */
+  citations: string[];
+  /** True when an assistant message is a weak-retrieval refusal (offline mode). */
+  refused: boolean;
+  /**
+   * For assistant messages: whether the answer was grounded in a strong note
+   * match. When false, the model may have used general knowledge — the UI flags
+   * this so the reader knows the answer did not come from their vault.
+   */
+  grounded?: boolean;
 }
 
 /** Result of a cited Q&A request. */

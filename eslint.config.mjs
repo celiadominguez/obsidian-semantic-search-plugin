@@ -3,7 +3,13 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["main.js", "node_modules/**", "eval/results/**", "scripts/data/**"],
+    ignores: [
+      "**/main.js",
+      "node_modules/**",
+      "eval/results/**",
+      "scripts/data/**",
+      "**/.obsidian/**",
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

@@ -72,5 +72,9 @@ export const MarkdownRenderer = {
   async render(): Promise<void> {},
 };
 
+export async function requestUrl(): Promise<{ status: number; json: unknown }> {
+  return { status: 200, json: {} };
+}
+
 export type WorkspaceLeaf = unknown;
 export type App = unknown;

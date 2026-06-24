@@ -13,7 +13,7 @@ import { INDEX_DEBOUNCE_MS } from "./core/config";
 import { defaultSettings } from "./core/config";
 import type { VaultSeekSettings } from "./core/types";
 import { IndexService } from "./obsidian/indexService";
-import { SearchView, VAULTSEEK_VIEW_TYPE } from "./obsidian/SearchView";
+import { VaultSeekView, VAULTSEEK_VIEW_TYPE, type ViewMode } from "./obsidian/VaultSeekView";
 import { SettingsTab, type SettingsHost } from "./obsidian/SettingsTab";
 
 const DEFAULT_PLUGIN_DIR = ".obsidian/plugins/vaultseek";
@@ -31,14 +31,24 @@ export default class VaultSeekPlugin extends Plugin implements SettingsHost {
     const pluginDir = this.manifest.dir ?? DEFAULT_PLUGIN_DIR;
     this.index = new IndexService(this.app, this.settings, pluginDir);
 
-    this.registerView(VAULTSEEK_VIEW_TYPE, (leaf) => new SearchView(leaf, this.index));
+    this.registerView(VAULTSEEK_VIEW_TYPE, (leaf) => new VaultSeekView(leaf, this.index));
 
-    this.addRibbonIcon("search", "VaultSeek: semantic search", () => void this.activateView());
+    this.addRibbonIcon(
+      "brain-circuit",
+      "VaultSeek: search & chat",
+      () => void this.activateView("search"),
+    );
 
     this.addCommand({
       id: "open-search",
       name: "Open semantic search",
-      callback: () => void this.activateView(),
+      callback: () => void this.activateView("search"),
+    });
+
+    this.addCommand({
+      id: "open-chat",
+      name: "Open chat",
+      callback: () => void this.activateView("chat"),
     });
 
     this.addCommand({
@@ -70,8 +80,8 @@ export default class VaultSeekPlugin extends Plugin implements SettingsHost {
     }
   }
 
-  /** Open (or reveal) the search view in the right sidebar. */
-  private async activateView(): Promise<void> {
+  /** Open (or reveal) the unified view in the right sidebar, set to `mode`. */
+  private async activateView(mode: ViewMode): Promise<void> {
     const { workspace } = this.app;
     let leaf: WorkspaceLeaf | null = workspace.getLeavesOfType(VAULTSEEK_VIEW_TYPE)[0] ?? null;
     if (leaf === null) {
@@ -80,6 +90,9 @@ export default class VaultSeekPlugin extends Plugin implements SettingsHost {
     }
     if (leaf !== null) {
       await workspace.revealLeaf(leaf);
+      if (leaf.view instanceof VaultSeekView) {
+        leaf.view.setMode(mode);
+      }
     }
   }
 

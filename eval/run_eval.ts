@@ -85,6 +85,7 @@ async function main(): Promise<void> {
   });
   console.log(`Indexed ${store.size} chunks.`);
 
+  const queryInstruction = EMBEDDING_MODELS[modelId].queryInstruction;
   const qrels = readJsonl<Qrel>(join(EVAL_DIR, "scifact_qrels.jsonl"));
   console.log(`Scoring ${qrels.length} queries…`);
   const ranking = await evaluateAllModes(
@@ -94,11 +95,12 @@ async function main(): Promise<void> {
     qrels,
     DEFAULT_HYBRID_ALPHA,
     SEMANTIC_POOL,
+    queryInstruction,
   );
 
   const wikiqa = readJsonl<WikiQaEntry>(join(EVAL_DIR, "wikiqa_slice.jsonl"));
   console.log(`Grounding check over ${wikiqa.length} WikiQA questions…`);
-  const grounding = await groundingCheck(embedder, wikiqa);
+  const grounding = await groundingCheck(embedder, wikiqa, queryInstruction);
 
   const metrics = {
     generatedAt: new Date().toISOString(),

@@ -79,16 +79,83 @@ type Dtype = "q8" | "int8" | "uint8" | "fp32" | "fp16" | "q4" | "auto";
 type Device = "webgpu" | "wasm" | "cpu" | "coreml" | "auto";
 
 /**
+ * True only under a *real* Node process (the eval), not a browser or an Electron
+ * renderer. Checking `process.versions.node` is not enough: Electron's renderer
+ * exposes Node's `process` too, which is exactly what misleads transformers.js.
+ * A real Node process has neither a `window` nor a Web Worker `self`, whereas the
+ * Obsidian renderer has `window` and the embedding worker has `self`.
+ */
+function isRealNode(): boolean {
+  return (
+    typeof window === "undefined" &&
+    typeof self === "undefined" &&
+    typeof process !== "undefined" &&
+    typeof process.versions?.node === "string"
+  );
+}
+
+/**
  * Non-GPU device for the current runtime: transformers.js exposes "wasm" in the
  * browser/Web Worker but "cpu" under Node, so the fallback device differs by
  * environment. This keeps the same model working in the plugin and in the eval.
  */
 function nonGpuDevice(): Device {
-  const isNode =
-    typeof process !== "undefined" &&
-    Boolean(process.versions) &&
-    typeof process.versions.node === "string";
-  return isNode ? "cpu" : "wasm";
+  return isRealNode() ? "cpu" : "wasm";
+}
+
+/**
+ * Import transformers.js so it selects its **web** backend inside an Electron
+ * renderer.
+ *
+ * Obsidian's renderer exposes Node's `process`, so transformers.js's
+ * `IS_NODE_ENV` check (`process.release.name === 'node'`) is true and it reaches
+ * for `onnxruntime-node` (absent in the browser bundle), leaving
+ * `InferenceSession` undefined. We therefore present a non-"node" `process.release`
+ * for the duration of the module's one-time initialization, which makes
+ * transformers take its web path — wiring up onnxruntime-web *and* the supported
+ * device list (`wasm`/`webgpu`). The original `release` is restored immediately
+ * after. No-op under real Node (the eval), where onnxruntime-node is correct.
+ */
+async function importTransformers(): Promise<typeof import("@huggingface/transformers")> {
+  const proc = typeof process !== "undefined" ? process : undefined;
+  const release = proc?.release;
+  const spoof =
+    !isRealNode() && release !== undefined && release !== null && release.name === "node";
+  if (spoof && proc !== undefined) {
+    Object.defineProperty(proc, "release", {
+      value: { ...release, name: "electron" },
+      configurable: true,
+    });
+  }
+  try {
+    return await import("@huggingface/transformers");
+  } finally {
+    if (spoof && proc !== undefined) {
+      Object.defineProperty(proc, "release", { value: release, configurable: true });
+    }
+  }
+}
+
+/**
+ * Configure the ONNX Runtime WASM backend for restrictive renderers.
+ *
+ * Obsidian's Electron renderer is not cross-origin isolated, so `SharedArrayBuffer`
+ * is unavailable and ORT's default multi-threaded WASM backend fails to register —
+ * which surfaces downstream as "Cannot read properties of undefined (reading
+ * 'create')" when transformers.js calls `InferenceSession.create`. Forcing a
+ * single thread and disabling the proxy worker uses the backend that works there.
+ * In Node this targets onnxruntime-node, where these WASM settings are simply
+ * ignored, so it is safe on every code path.
+ */
+function configureOnnxRuntime(transformers: unknown): void {
+  const env = (transformers as { env?: unknown }).env;
+  const wasm = (
+    env as { backends?: { onnx?: { wasm?: { numThreads?: number; proxy?: boolean } } } } | undefined
+  )?.backends?.onnx?.wasm;
+  if (wasm !== undefined) {
+    wasm.numThreads = 1;
+    wasm.proxy = false;
+  }
 }
 
 /** Default quantization: int8, keeping the bge-small model around 33 MB. */
@@ -137,7 +204,8 @@ export class TransformersEmbedder implements Embedder {
   }
 
   private async createPipeline(): Promise<FeatureExtractionPipeline> {
-    const transformers = await import("@huggingface/transformers");
+    const transformers = await importTransformers();
+    configureOnnxRuntime(transformers);
     const fallback = nonGpuDevice();
     const device: Device = this.useWebGPU ? "webgpu" : fallback;
     try {

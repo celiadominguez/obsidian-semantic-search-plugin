@@ -11,42 +11,64 @@
   padding: var(--size-4-2);
 }
 
+.vaultseek-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--size-4-2);
+}
+
+.vaultseek-tabs {
+  display: flex;
+  gap: var(--size-2-1);
+  background: var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: 2px;
+}
+
+.vaultseek-tab {
+  box-shadow: none;
+  background: transparent;
+  color: var(--text-muted);
+  padding: var(--size-2-2) var(--size-4-3);
+  border-radius: var(--radius-s);
+  cursor: pointer;
+}
+
+.vaultseek-tab.is-active {
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-weight: var(--font-semibold);
+}
+
+.vaultseek-reset {
+  font-size: var(--font-ui-smaller);
+}
+
+.vaultseek-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+}
+
 .vaultseek-search-row {
   display: flex;
   gap: var(--size-4-1);
-  align-items: center;
+  align-items: flex-end;
 }
 
-.vaultseek-search-input {
+.vaultseek-input {
   flex: 1;
+  resize: vertical;
+  min-height: 2.2em;
 }
 
 .vaultseek-status {
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
   min-height: 1.2em;
-}
-
-.vaultseek-progress {
-  height: 4px;
-  border-radius: var(--radius-s);
-  background: var(--background-modifier-border);
-  overflow: hidden;
-}
-
-.vaultseek-progress-bar {
-  height: 100%;
-  width: 0;
-  background: var(--interactive-accent);
-  transition: width 120ms ease-out;
-}
-
-.vaultseek-results {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--size-4-2);
 }
 
 .vaultseek-result {
@@ -102,33 +124,132 @@
   text-decoration: underline;
 }
 
-.vaultseek-qa {
-  border-top: 1px solid var(--background-modifier-border);
-  padding-top: var(--size-4-2);
-  display: flex;
-  flex-direction: column;
-  gap: var(--size-4-2);
-}
-
-.vaultseek-qa-answer {
-  background: var(--background-secondary);
-  border-radius: var(--radius-m);
-  padding: var(--size-4-2);
-  line-height: 1.5;
-}
-
-.vaultseek-qa-answer.is-refusal {
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-.vaultseek-qa-citations {
-  font-size: var(--font-ui-smaller);
-  color: var(--text-muted);
-}
-
 .vaultseek-empty {
   color: var(--text-faint);
   text-align: center;
   margin-top: var(--size-4-8);
+}
+
+/* Chat thread */
+
+.vaultseek-chat-model {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  padding: var(--size-2-1) 0;
+}
+
+.vaultseek-chat-banner {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  border-radius: var(--radius-s);
+  padding: var(--size-4-2);
+}
+
+.vaultseek-chat-message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2-1);
+  max-width: 92%;
+}
+
+.vaultseek-chat-message.is-user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.vaultseek-chat-message.is-assistant {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.vaultseek-chat-bubble {
+  border-radius: var(--radius-m);
+  padding: var(--size-4-2);
+  line-height: 1.5;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.vaultseek-msg-actions {
+  display: flex;
+  gap: var(--size-2-2);
+}
+
+.vaultseek-msg-action {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.vaultseek-msg-action:hover {
+  color: var(--text-accent);
+  text-decoration: underline;
+}
+
+.is-user .vaultseek-chat-bubble {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.is-assistant .vaultseek-chat-bubble {
+  background: var(--background-secondary);
+  color: var(--text-normal);
+}
+
+.vaultseek-chat-bubble.is-pending {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.vaultseek-chat-bubble.is-refusal {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.vaultseek-chat-bubble > :first-child {
+  margin-top: 0;
+}
+
+.vaultseek-chat-bubble > :last-child {
+  margin-bottom: 0;
+}
+
+.vaultseek-chat-citations {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+
+.vaultseek-chat-grounding {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-warning);
+  font-style: italic;
+}
+
+.vaultseek-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-2-2);
+  font-size: var(--font-ui-smaller);
+}
+
+.vaultseek-context-label {
+  color: var(--text-faint);
+}
+
+.vaultseek-context-chip {
+  color: var(--text-accent);
+  background: var(--background-modifier-hover);
+  border-radius: var(--radius-s);
+  padding: 0 var(--size-2-2);
+  cursor: pointer;
+  max-width: 16em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vaultseek-context-chip:hover {
+  text-decoration: underline;
 }

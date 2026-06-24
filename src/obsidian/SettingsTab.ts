@@ -7,6 +7,8 @@
 
 import { type Plugin, PluginSettingTab, Setting } from "obsidian";
 import { EMBEDDING_MODELS, GENERATION_BACKENDS } from "../core/config";
+import { listOllamaModels, listOpenAiModels } from "../core/qa";
+import { obsidianHttpClient } from "./obsidianHttp";
 import type { EmbeddingModelId, GenerationBackend, VaultSeekSettings } from "../core/types";
 
 /** What the settings tab needs from the plugin, decoupled from the class. */
@@ -134,7 +136,8 @@ export class SettingsTab extends PluginSettingTab {
       .setName("Generation backend")
       .setDesc(
         "How cited answers are generated. 'none' is fully offline (retrieval-only). " +
-          "'ollama' uses a local server. 'hosted' is opt-in and sends only retrieved chunks.",
+          "'ollama' and 'lmstudio' use a local server. 'hosted' is opt-in. All non-'none' " +
+          "backends send only the retrieved chunks, never the whole vault.",
       )
       .addDropdown((dropdown) => {
         for (const backend of GENERATION_BACKENDS) {
@@ -157,15 +160,38 @@ export class SettingsTab extends PluginSettingTab {
             await this.host.saveSettings();
           }),
         );
+      this.addModelDropdown(
+        containerEl,
+        "Ollama model",
+        "Pick from the models you have pulled (run 'ollama pull <model>' to add more).",
+        () => settings.ollamaModel,
+        (value) => {
+          settings.ollamaModel = value;
+        },
+        () => listOllamaModels(settings.ollamaEndpoint, obsidianHttpClient),
+      );
+    }
+
+    if (settings.generationBackend === "lmstudio") {
       new Setting(containerEl)
-        .setName("Ollama model")
-        .setDesc("Model name served by Ollama, e.g. llama3.1:8b.")
+        .setName("LM Studio endpoint")
+        .setDesc("LM Studio's local server base URL (Developer tab → Start Server).")
         .addText((text) =>
-          text.setValue(settings.ollamaModel).onChange(async (value) => {
-            settings.ollamaModel = value.trim();
+          text.setValue(settings.lmstudioEndpoint).onChange(async (value) => {
+            settings.lmstudioEndpoint = value.trim();
             await this.host.saveSettings();
           }),
         );
+      this.addModelDropdown(
+        containerEl,
+        "LM Studio model",
+        "Pick from the models currently loaded in LM Studio.",
+        () => settings.lmstudioModel,
+        (value) => {
+          settings.lmstudioModel = value;
+        },
+        () => listOpenAiModels(settings.lmstudioEndpoint, undefined, obsidianHttpClient),
+      );
     }
 
     if (settings.generationBackend === "hosted") {
@@ -198,5 +224,54 @@ export class SettingsTab extends PluginSettingTab {
           });
         });
     }
+  }
+
+  /**
+   * A model setting backed by a dropdown that asynchronously lists the models a
+   * local server reports. The currently-saved value is always selectable (even if
+   * the server is down), and if no model is set yet the first listed model is
+   * chosen. Falls back to a clear hint when the server is unreachable.
+   */
+  private addModelDropdown(
+    containerEl: HTMLElement,
+    name: string,
+    desc: string,
+    getValue: () => string,
+    setValue: (value: string) => void,
+    fetcher: () => Promise<string[]>,
+  ): void {
+    new Setting(containerEl)
+      .setName(name)
+      .setDesc(desc)
+      .addDropdown((dropdown) => {
+        const current = getValue();
+
+        const rebuild = (models: string[], placeholder?: string): void => {
+          dropdown.selectEl.empty();
+          const list = [...new Set([current, ...models])].filter((m) => m.length > 0);
+          if (list.length === 0) {
+            dropdown.addOption("", placeholder ?? "No models found");
+          } else {
+            for (const model of list) {
+              dropdown.addOption(model, model);
+            }
+          }
+          const next = current.length > 0 && list.includes(current) ? current : (list[0] ?? "");
+          dropdown.setValue(next);
+          if (next !== current) {
+            setValue(next);
+            void this.host.saveSettings();
+          }
+        };
+
+        rebuild([], "Loading models…");
+        dropdown.onChange(async (value) => {
+          setValue(value);
+          await this.host.saveSettings();
+        });
+        void fetcher()
+          .then((models) => rebuild(models))
+          .catch(() => rebuild([], "Server unreachable — is it running?"));
+      });
   }
 }
