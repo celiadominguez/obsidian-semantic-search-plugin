@@ -213,7 +213,20 @@ export class VaultSeekView extends ItemView {
       return;
     }
     this.statusEl.setText("Searching…");
-    const results = await this.index.search(query, "hybrid", DEFAULT_TOP_K);
+    let results;
+    try {
+      results = await this.index.search(query, "hybrid", DEFAULT_TOP_K);
+    } catch (error) {
+      // Most likely the embedding model failed to load (e.g. offline before the
+      // one-time download). Surface it instead of leaving "Searching…" forever.
+      this.statusEl.setText("");
+      this.searchBodyEl.empty();
+      this.searchBodyEl.createDiv({
+        cls: "vaultseek-empty",
+        text: `Search failed: ${error instanceof Error ? error.message : String(error)}`,
+      });
+      return;
+    }
     this.statusEl.setText(`${results.length} result${results.length === 1 ? "" : "s"}`);
     this.searchBodyEl.empty();
     if (results.length === 0) {

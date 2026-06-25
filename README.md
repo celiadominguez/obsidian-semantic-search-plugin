@@ -214,8 +214,9 @@ default blend. The default `α = 0.6` is kept as a general-purpose setting that 
 robust across vaults rather than tuned to this benchmark; raising `α` favours
 SciFact specifically. These numbers were not tuned against the qrels.
 
-**A note on refusal.** Cited Q&A and chat refuse when the best retrieved chunk
-falls below a per-model cosine floor. Dense embeddings are anisotropic — even
+**A note on refusal.** With the offline backend, chat refuses when the best
+retrieved chunk falls below a per-model cosine floor. Dense embeddings are
+anisotropic — even
 unrelated text has a non-trivial baseline cosine — so the floor is calibrated per
 model (0.5 for BGE) and the query instruction prefix is what cleanly separates
 genuine queries from out-of-domain noise. The floor is deliberately biased toward
@@ -224,10 +225,11 @@ than answered from thin context.
 
 ## Privacy
 
-- **Offline by default.** After the one-time embedding-model download, the
-  default configuration (`generationBackend: none`) makes **zero network calls**.
-  Indexing and search are entirely on-device; chat is disabled until you choose a
-  model.
+- **Offline by default.** The only network access in the default configuration
+  (`generationBackend: none`) is a **one-time download of the embedding model**
+  (~33 MB), fetched from the Hugging Face CDN by transformers.js on first index
+  and cached on disk. After that, indexing and search make **zero network
+  calls** and run entirely on-device; chat is disabled until you choose a model.
 - **Read-only over your vault.** The plugin only ever writes to its own
   `.obsidian/plugins/vaultseek/` data folder (the vector blob and its sidecar).
   It never modifies your notes.

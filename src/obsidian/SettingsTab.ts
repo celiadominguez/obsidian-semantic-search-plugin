@@ -1,8 +1,9 @@
 /**
  * Settings tab exposing every configuration key. Each control reads from and
- * writes to the host plugin's settings and persists immediately. Changes that
- * affect the index (model, chunking) prompt a re-index; privacy-sensitive
- * controls (hosted generation) are grouped and clearly labelled as opt-in.
+ * writes to the host plugin's settings and persists immediately. Changing the
+ * embedding model re-indexes automatically; chunking changes take effect on the
+ * next manual re-index. Privacy-sensitive controls (hosted generation) are
+ * grouped and clearly labelled as opt-in.
  */
 
 import { type Plugin, PluginSettingTab, Setting } from "obsidian";
@@ -62,7 +63,7 @@ export class SettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Chunk size (tokens)")
-      .setDesc("Approximate tokens per chunk. Changing it triggers a full re-index.")
+      .setDesc('Approximate tokens per chunk. Takes effect on the next "Re-index vault".')
       .addText((text) =>
         text.setValue(String(settings.chunkTokens)).onChange(async (value) => {
           const parsed = Number.parseInt(value, 10);
@@ -75,7 +76,7 @@ export class SettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Chunk overlap (tokens)")
-      .setDesc("Token overlap between adjacent chunks of one section.")
+      .setDesc('Token overlap between adjacent chunks. Takes effect on the next "Re-index vault".')
       .addText((text) =>
         text.setValue(String(settings.chunkOverlap)).onChange(async (value) => {
           const parsed = Number.parseInt(value, 10);
@@ -119,7 +120,10 @@ export class SettingsTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Excluded folders")
-      .setDesc("Comma-separated vault paths to skip when indexing.")
+      .setDesc(
+        "Comma-separated vault paths to skip when indexing. Applies to new edits immediately; " +
+          'run "Re-index vault" to drop already-indexed notes.',
+      )
       .addTextArea((text) =>
         text.setValue(settings.excludedFolders.join(", ")).onChange(async (value) => {
           settings.excludedFolders = value
@@ -130,7 +134,7 @@ export class SettingsTab extends PluginSettingTab {
         }),
       );
 
-    new Setting(containerEl).setName("Q&A generation").setHeading();
+    new Setting(containerEl).setName("Chat (answer generation)").setHeading();
 
     new Setting(containerEl)
       .setName("Generation backend")
