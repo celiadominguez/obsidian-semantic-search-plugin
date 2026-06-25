@@ -17,7 +17,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { HashingEmbedder } from "../src/core/embedder";
 import { defaultSettings } from "../src/core/config";
-import { QaEngine, NoneGenerator } from "../src/core/qa";
+import { NoneGenerator } from "../src/core/qa";
+import { ChatEngine } from "../src/core/chat";
 import { VectorStore } from "../src/core/vectorStore";
 import { rank } from "../src/core/hybridRanker";
 import { buildIndex, evaluateAllModes, type Qrel } from "../eval/evaluate";
@@ -139,13 +140,13 @@ describe("Hardening acceptance", () => {
     expect(readme.toLowerCase()).toMatch(/verdict/);
   });
 
-  it("Q&A citations resolve to real demo-vault note paths", async () => {
+  it("chat citations resolve to real demo-vault note paths", async () => {
     const notes = loadSubset();
     const embedder = new HashingEmbedder(DIM);
     const { chunkTokens, chunkOverlap } = defaultSettings();
     const { store, bm25 } = await buildIndex(embedder, notes, { chunkTokens, chunkOverlap });
 
-    const engine = new QaEngine({
+    const engine = new ChatEngine({
       embedder,
       store,
       bm25,
@@ -153,30 +154,30 @@ describe("Hardening acceptance", () => {
       alpha: 0.6,
       similarityFloor: 0.1,
     });
-    const result = await engine.answer(notes[0].title);
-    expect(result.refused).toBe(false);
-    expect(result.citations.length).toBeGreaterThan(0);
-    for (const citation of result.citations) {
+    const { message } = await engine.ask(notes[0].title);
+    expect(message.refused).toBe(false);
+    expect(message.citations.length).toBeGreaterThan(0);
+    for (const citation of message.citations) {
       expect(existsSync(join(DEMO_VAULT_DIR, citation))).toBe(true);
     }
   });
 
-  it("Q&A refuses when retrieval is below the confidence floor", async () => {
+  it("offline chat refuses when retrieval is below the confidence floor", async () => {
     const notes = loadSubset();
     const embedder = new HashingEmbedder(DIM);
     const { chunkTokens, chunkOverlap } = defaultSettings();
     const { store, bm25 } = await buildIndex(embedder, notes, { chunkTokens, chunkOverlap });
 
-    const engine = new QaEngine({
+    const engine = new ChatEngine({
       embedder,
       store,
       bm25,
       generator: new NoneGenerator(),
       alpha: 0.6,
     });
-    const result = await engine.answer("qwxz vbnmqp plokju ytrewq zxcvbn asdfgh");
-    expect(result.refused).toBe(true);
-    expect(result.citations).toHaveLength(0);
+    const { message } = await engine.ask("qwxz vbnmqp plokju ytrewq zxcvbn asdfgh");
+    expect(message.refused).toBe(true);
+    expect(message.citations).toHaveLength(0);
   });
 
   it("settings tab covers every configuration key", () => {

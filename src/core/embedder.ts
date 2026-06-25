@@ -1,8 +1,8 @@
 /**
  * Embedding utilities and implementations.
  *
- * Two concerns live here: pure vector math (mean-pooling, L2-normalization,
- * cosine) shared by every code path, and two `Embedder` implementations:
+ * Two concerns live here: pure vector math (L2-normalization, cosine) shared by
+ * every code path, and two `Embedder` implementations:
  *
  *  - `TransformersEmbedder` — the real on-device model via transformers.js. It
  *    runs unchanged in Node (for the offline eval) and in the browser/Web Worker
@@ -18,24 +18,6 @@
 
 import { hashText } from "./hash";
 import type { Embedder, EmbeddingModelId } from "./types";
-
-/** Mean-pool a [tokens, dim] matrix down to a single [dim] vector. */
-export function meanPool(tokenVectors: Float32Array[], dim: number): Float32Array {
-  const pooled = new Float32Array(dim);
-  if (tokenVectors.length === 0) {
-    return pooled;
-  }
-  for (const vec of tokenVectors) {
-    for (let i = 0; i < dim; i++) {
-      pooled[i] += vec[i];
-    }
-  }
-  const inv = 1 / tokenVectors.length;
-  for (let i = 0; i < dim; i++) {
-    pooled[i] *= inv;
-  }
-  return pooled;
-}
 
 /** L2-normalize a vector in place and return it. Zero vectors are left as-is. */
 export function l2Normalize(vector: Float32Array): Float32Array {

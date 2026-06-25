@@ -135,11 +135,6 @@ export class VectorStore {
     return this.records.has(id);
   }
 
-  /** Content hash of a stored chunk, or `undefined` if absent. */
-  public getHash(id: string): string | undefined {
-    return this.records.get(id)?.hash;
-  }
-
   /** Chunk metadata for a stored id, or `undefined` if absent. */
   public getChunk(id: string): Chunk | undefined {
     return this.records.get(id)?.chunk;

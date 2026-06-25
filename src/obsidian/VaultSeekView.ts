@@ -141,15 +141,6 @@ export class VaultSeekView extends ItemView {
     this.inputEl.focus();
   }
 
-  /** Reveal and optionally seed the view (used by the commands). */
-  public activate(mode: ViewMode, initialQuery?: string): void {
-    this.setMode(mode);
-    if (initialQuery !== undefined) {
-      this.inputEl.value = initialQuery;
-      void this.submit();
-    }
-  }
-
   private refreshBanner(): void {
     const isChat = this.mode === "chat";
     if (isChat) {

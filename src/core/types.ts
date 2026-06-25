@@ -54,12 +54,6 @@ export interface Chunk {
   text: string;
 }
 
-/** A chunk plus its content hash, the diffing unit for incremental re-embedding. */
-export interface HashedChunk extends Chunk {
-  /** Stable hash of `text`; unchanged hash means the chunk need not be re-embedded. */
-  hash: string;
-}
-
 /** A stored vector entry: chunk metadata alongside its embedding. */
 export interface VectorRecord {
   chunk: Chunk;
@@ -123,18 +117,6 @@ export interface ChatMessage {
    * this so the reader knows the answer did not come from their vault.
    */
   grounded?: boolean;
-}
-
-/** Result of a cited Q&A request. */
-export interface QaResult {
-  /** Answer text with inline `[[note]]` citations, or a refusal message. */
-  answer: string;
-  /** True when retrieval was too weak and the engine declined to answer. */
-  refused: boolean;
-  /** Note paths cited in the answer, in citation order. */
-  citations: string[];
-  /** The retrieved chunks used as grounding context. */
-  context: SearchResult[];
 }
 
 /** Everything a generator needs to produce a grounded answer. */

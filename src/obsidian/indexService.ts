@@ -16,22 +16,14 @@ import { EMBED_BATCH_SIZE } from "../core/config";
 import { chunkNote } from "../core/chunker";
 import { hashText } from "../core/hash";
 import { rank } from "../core/hybridRanker";
-import { QaEngine, createGenerator } from "../core/qa";
+import { createGenerator } from "../core/qa";
 import { ChatEngine } from "../core/chat";
 import { Bm25Index } from "../core/bm25";
 import { obsidianHttpClient } from "./obsidianHttp";
 import { VectorStore, type VectorSidecar } from "../core/vectorStore";
 import { WorkerEmbedder } from "../worker/workerEmbedder";
 import { EMBEDDING_MODELS, type EmbeddingModelInfo } from "../core/config";
-import type {
-  Chunk,
-  Embedder,
-  NoteInput,
-  QaResult,
-  RankingMode,
-  SearchResult,
-  VaultSeekSettings,
-} from "../core/types";
+import type { Chunk, NoteInput, RankingMode, SearchResult, VaultSeekSettings } from "../core/types";
 
 const VECTOR_BLOB_FILE = "index.bin";
 const SIDECAR_FILE = "index.json";
@@ -92,11 +84,6 @@ export class IndexService {
       modelId: this.settings.embeddingModel,
       hnswThreshold: this.settings.hnswThreshold,
     });
-  }
-
-  /** The active embedder (exposed for the worker lifecycle in `main.ts`). */
-  public get activeEmbedder(): Embedder {
-    return this.embedder;
   }
 
   /** Apply updated settings; a model change requires a full re-index by the caller. */
@@ -182,7 +169,7 @@ export class IndexService {
   }
 
   /** Index (or re-index) a single note incrementally using content hashes. */
-  public async indexNote(note: NoteInput): Promise<void> {
+  private async indexNote(note: NoteInput): Promise<void> {
     const chunks = chunkNote(note, this.settings.chunkTokens, this.settings.chunkOverlap);
     const hashes = new Map(chunks.map((chunk) => [chunk.id, hashText(chunk.text)]));
     const existing = this.store.hashesForNote(note.path);
@@ -249,19 +236,6 @@ export class IndexService {
     await this.persist();
   }
 
-  /** Delete the entire index, including persisted files. */
-  public async deleteIndex(): Promise<void> {
-    this.store.clear();
-    this.bm25.clear();
-    this.indexedNotes.clear();
-    const adapter = this.app.vault.adapter;
-    for (const path of [this.vectorBlobPath(), this.sidecarPath()]) {
-      if (await adapter.exists(path)) {
-        await adapter.remove(path);
-      }
-    }
-  }
-
   /** Per-model retrieval configuration (query instruction + refusal floor). */
   private modelInfo(): EmbeddingModelInfo {
     return EMBEDDING_MODELS[this.settings.embeddingModel];
@@ -279,20 +253,6 @@ export class IndexService {
       topK,
       queryInstruction: this.modelInfo().queryInstruction,
     });
-  }
-
-  /** Answer a question with cited Q&A using the configured generation backend. */
-  public async answer(question: string): Promise<QaResult> {
-    const engine = new QaEngine({
-      embedder: this.embedder,
-      store: this.store,
-      bm25: this.bm25,
-      generator: createGenerator(this.settings, obsidianHttpClient),
-      alpha: this.settings.hybridAlpha,
-      similarityFloor: this.modelInfo().similarityFloor,
-      queryInstruction: this.modelInfo().queryInstruction,
-    });
-    return engine.answer(question);
   }
 
   /** Create a fresh multi-turn chat engine bound to the current index and settings. */
