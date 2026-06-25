@@ -97,6 +97,55 @@ To test it in a vault, copy `main.js`, `manifest.json`, and `styles.css` into
 Obsidian's Community Plugins settings. On first index the embedding model
 (~33 MB) is downloaded once and cached on disk; everything after that is offline.
 
+## Demo vault
+
+The repo ships a ready-made vault at [`demo-vault/`](demo-vault/) so you can try
+VaultSeek without using your own notes.
+
+**What it contains:** 1,000 Markdown notes, one per scientific abstract from the
+[BeIR/SciFact](https://github.com/allenai/scifact) corpus — peer-reviewed
+biomedical and life-sciences research (genetics, immunology, oncology, cell
+biology, neuroscience, …). Each note has YAML frontmatter (`id`, `title`,
+`source`) and the abstract text under a heading, e.g.:
+
+```markdown
+---
+id: "12885341"
+title: "A C-Type Lectin Collaborates with a CD45 Phosphatase Homolog to Facilitate West Nile Virus Infection of Mosquitoes"
+source: "BeIR/SciFact"
+---
+
+# A C-Type Lectin Collaborates with a CD45 Phosphatase Homolog …
+
+<abstract text>
+```
+
+**To use it:** open `demo-vault/` as a vault in Obsidian (Open another vault →
+Open folder as vault) and install the plugin into
+`demo-vault/.obsidian/plugins/vaultseek/` as in Setup. Wait for the status bar to
+reach `indexed (N chunks)`.
+
+**Sample searches** (Search tab — these have matching notes in the vault):
+
+- `ALDH1 expression and breast cancer outcomes`
+- `0-dimensional biomaterials inductive properties`
+- `do hematopoietic stem cells segregate chromosomes randomly`
+- `loss of TET protein function and myeloid cancers`
+
+**Sample chat questions** (Chat tab — needs a generation model; see
+Configuration):
+
+- "Is ALDH1 expression associated with breast cancer prognosis?"
+- "What role does DMRT1 play in sex determination?"
+- "Can blocking the TDP-43 interaction with complex I proteins reduce neuronal
+  loss?"
+- "Summarize what the notes say about TET proteins and cancer."
+
+Answers cite the source notes as `[[links]]`, and the **Context used** chips under
+each reply show exactly which abstracts were retrieved. Because the corpus is
+scientific, phrasing questions in its terms (gene names, conditions) gives the
+best matches.
+
 ## Configuration
 
 Every setting has a default, so a fresh install runs fully offline with no setup.
