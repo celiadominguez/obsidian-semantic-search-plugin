@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { ChatEngine, buildChatPrompt, renderHistory } from "../src/core/chat";
 import { HashingEmbedder } from "../src/core/embedder";
-import { NoneGenerator } from "../src/core/qa";
+import { NoneGenerator } from "../src/core/generation";
 import { defaultSettings } from "../src/core/config";
 import { buildIndex } from "../eval/evaluate";
 import type { ChatMessage, Generator, NoteInput } from "../src/core/types";

@@ -42,6 +42,16 @@ const buildOptions = {
   platform: "browser",
   target: "es2022",
   external: EXTERNALS,
+  // Run embeddings on the CPU (WASM) backend only: redirect transformers.js off
+  // the WebGPU/JSEP ONNX Runtime bundle onto the smaller WASM-only one. This both
+  // drops WebGPU (unreliable in Obsidian's Electron) and lets us inline the 12 MB
+  // CPU `.wasm` instead of the 25 MB JSEP build.
+  alias: {
+    "onnxruntime-web/webgpu": "onnxruntime-web/wasm",
+  },
+  // Inline `.wasm` imports as bytes so the ORT engine ships inside main.js (see
+  // src/obsidian/ortWasm.ts for why it must be inlined rather than shipped apart).
+  loader: { ".wasm": "binary" },
   banner: { js: BANNER },
   sourcemap: PRODUCTION ? false : "inline",
   treeShaking: true,

@@ -61,7 +61,7 @@ vault events (create/modify/delete/rename)
    chunk (heading-aware, ~512 tokens, 64 overlap)
         │
         ▼
-   embed  ──►  transformers.js on-device (WebGPU → WASM), in batches
+   embed  ──►  transformers.js on-device (ONNX Runtime, WASM/CPU), in batches
         │
         ▼
    store  ──►  Float32 vectors (exact cosine; HNSW above a threshold)
@@ -153,7 +153,6 @@ Every setting has a default, so a fresh install runs fully offline with no setup
 | Setting                                           | Default                                  | Purpose                                                    |
 | ------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------- |
 | `embeddingModel`                                  | `Xenova/bge-small-en-v1.5`               | On-device embedding model (also `Xenova/all-MiniLM-L6-v2`) |
-| `useWebGPU`                                       | `true` (auto-fallback to WASM)           | Acceleration backend                                       |
 | `chunkTokens` / `chunkOverlap`                    | `512` / `64`                             | Chunk size and overlap (approx. tokens)                    |
 | `hybridAlpha`                                     | `0.6`                                    | Semantic vs lexical blend (1.0 = semantic only)            |
 | `hnswThreshold`                                   | `20000`                                  | Chunk count above which HNSW replaces exact cosine         |
@@ -161,7 +160,32 @@ Every setting has a default, so a fresh install runs fully offline with no setup
 | `ollamaEndpoint` / `ollamaModel`                  | `http://localhost:11434` / `llama3.1:8b` | Local generation (Ollama)                                  |
 | `lmstudioEndpoint` / `lmstudioModel`              | `http://localhost:1234/v1` / _(picked)_  | Local generation (LM Studio, OpenAI-compatible)            |
 | `hostedEndpoint` / `hostedModel` / `hostedApiKey` | empty                                    | Opt-in hosted generation only                              |
+| `localModelPath`                                  | empty                                    | Advanced: load the model from a vault folder (offline)     |
 | `excludedFolders`                                 | `[]`                                     | Vault folders to skip when indexing                        |
+
+### Advanced: fully offline (local model)
+
+By default the embedding model is downloaded once (~33 MB) and cached. For an
+air-gapped install you can instead place the model files in your vault and point
+the plugin at them — nothing is then downloaded.
+
+1. Obtain the model files for your chosen model (e.g. from
+   [`Xenova/bge-small-en-v1.5`](https://huggingface.co/Xenova/bge-small-en-v1.5)),
+   or copy them out of the transformers.js cache after one normal online run.
+2. Place them in a vault folder laid out as `<folder>/<model id>/…`, for example:
+
+   ```
+   models/Xenova/bge-small-en-v1.5/config.json
+   models/Xenova/bge-small-en-v1.5/tokenizer.json
+   models/Xenova/bge-small-en-v1.5/tokenizer_config.json
+   models/Xenova/bge-small-en-v1.5/onnx/model_quantized.onnx
+   ```
+
+3. Set **Local model folder** in settings to that folder (`models` above), then
+   run **Re-index vault**. The model now loads from disk with no network access.
+
+> Experimental: model loading is verified against the default layout above; if
+> embedding fails after setting it, clear the field to fall back to the download.
 
 ## Usage
 
@@ -177,8 +201,10 @@ Every setting has a default, so a fresh install runs fully offline with no setup
   - **Chat** is a multi-turn conversation grounded in your vault: each message
     runs a fresh hybrid retrieval, prior turns are threaded into a
     prompt-injection-safe prompt, and replies carry `[[note]]` citations. It
-    needs a generation model, so the **Chat tab is disabled while the backend is
-    `none`** (the default) — pick a local (`ollama` or `lmstudio`) or `hosted`
+    needs a generation model, so the **Chat tab stays disabled until a usable
+    backend is configured** — not just any non-`none` choice, but one with the
+    fields it actually needs (a `hosted` backend, for instance, needs an endpoint,
+    a model, and an API key). Pick a local (`ollama` or `lmstudio`) or `hosted`
     backend in settings to enable it; the model picker lists the models your
     server has available. When the notes don't cover a question the model answers
     from general knowledge, clearly flagged. **New chat** clears the conversation.
@@ -226,10 +252,19 @@ than answered from thin context.
 ## Privacy
 
 - **Offline by default.** The only network access in the default configuration
-  (`generationBackend: none`) is a **one-time download of the embedding model**
-  (~33 MB), fetched from the Hugging Face CDN by transformers.js on first index
-  and cached on disk. After that, indexing and search make **zero network
-  calls** and run entirely on-device; chat is disabled until you choose a model.
+  (`generationBackend: none`) is a **one-time download of the embedding-model
+  weights** (~33 MB of data, not code), fetched from the Hugging Face CDN by
+  transformers.js on first index and cached on disk. After that, indexing and
+  search make **zero network calls** and run entirely on-device; chat is disabled
+  until you choose a model.
+- **Inference runtime is inlined into the plugin.** The ONNX Runtime WebAssembly
+  engine (CPU build) is compiled **into `main.js` itself** and handed to the
+  runtime as bytes — it is **never fetched from a CDN**, so no executable code is
+  downloaded at runtime. (This is also why `main.js` is ~18 MB.)
+- **Pinned model weights.** Each embedding model is loaded at an exact Hugging
+  Face commit (`revision`), so the download is reproducible and a silently
+  re-uploaded model — different weights, quantization, or a malicious ONNX —
+  cannot change results out from under you.
 - **Read-only over your vault.** The plugin only ever writes to its own
   `.obsidian/plugins/vaultsleuth/` data folder (the vector blob and its sidecar).
   It never modifies your notes.

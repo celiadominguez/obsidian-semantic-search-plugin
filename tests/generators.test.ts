@@ -6,7 +6,7 @@ import {
   createGenerator,
   listOllamaModels,
   listOpenAiModels,
-} from "../src/core/qa";
+} from "../src/core/generation";
 import { defaultSettings } from "../src/core/config";
 import type { GenerationRequest } from "../src/core/types";
 

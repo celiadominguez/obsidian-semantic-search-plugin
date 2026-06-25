@@ -19,6 +19,18 @@ describe("stripFrontmatter", () => {
   it("strips an empty frontmatter block", () => {
     expect(stripFrontmatter("---\n---\nBody")).toBe("Body");
   });
+
+  it("does not strip a leading thematic break around prose", () => {
+    // A note that opens with a `---` horizontal rule, prose, then another rule
+    // must not be mistaken for YAML frontmatter and silently deleted.
+    const content = "---\nThis is a real paragraph of prose, not YAML.\n---\nMore body";
+    expect(stripFrontmatter(content)).toBe(content);
+  });
+
+  it("strips frontmatter that mixes keys and list items", () => {
+    const stripped = stripFrontmatter("---\ntags:\n  - a\n  - b\ntitle: x\n---\nBody");
+    expect(stripped).toBe("Body");
+  });
 });
 
 describe("chunkNote", () => {

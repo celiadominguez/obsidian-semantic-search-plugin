@@ -26,6 +26,12 @@ export interface EmbeddingModelInfo {
    * model; below this the engines refuse rather than answer from weak context.
    */
   similarityFloor: number;
+  /**
+   * Exact git commit on the Hugging Face Hub to load. Pinning the revision makes
+   * downloads reproducible and prevents a silently re-uploaded model (different
+   * weights or quantization) from changing results — or shipping malicious ONNX.
+   */
+  revision: string;
 }
 
 /** Embedding models the plugin can load on-device. */
@@ -35,6 +41,7 @@ export const EMBEDDING_MODELS: Record<EmbeddingModelId, EmbeddingModelInfo> = {
     label: "BGE Small EN v1.5 (default)",
     queryInstruction: "Represent this sentence for searching relevant passages: ",
     similarityFloor: 0.5,
+    revision: "ea104dacec62c0de699686887e3f920caeb4f3e3",
   },
   "Xenova/all-MiniLM-L6-v2": {
     // MiniLM is a symmetric model: no query instruction. Its floor is set
@@ -43,6 +50,7 @@ export const EMBEDDING_MODELS: Record<EmbeddingModelId, EmbeddingModelInfo> = {
     label: "all-MiniLM-L6-v2",
     queryInstruction: "",
     similarityFloor: 0.3,
+    revision: "751bff37182d3f1213fa05d7196b954e230abad9",
   },
 };
 
@@ -52,6 +60,16 @@ export const DEFAULT_EMBEDDING_MODEL: EmbeddingModelId = "Xenova/bge-small-en-v1
 /** Chunking defaults, expressed in approximate whitespace tokens. */
 export const DEFAULT_CHUNK_TOKENS = 512;
 export const DEFAULT_CHUNK_OVERLAP = 64;
+
+/**
+ * Upper bound for the user-tunable chunk size / overlap. A chunk far larger than
+ * the embedding model's context is silently truncated by the model, so the
+ * settings UI clamps to a value that stays comfortably usable.
+ */
+export const MAX_CHUNK_TOKENS = 2048;
+
+/** Upper bound for the user-tunable HNSW threshold (its lower bound is 1). */
+export const MAX_HNSW_THRESHOLD = 5_000_000;
 
 /** Hybrid blend: `score = alpha * cosine + (1 - alpha) * bm25_norm`. */
 export const DEFAULT_HYBRID_ALPHA = 0.6;
@@ -78,8 +96,11 @@ export const QA_SIMILARITY_FLOOR = 0.35;
 /** Number of chunks fed to the chat context window. */
 export const QA_CONTEXT_CHUNKS = 6;
 
-/** Most recent conversation turns carried into a chat prompt (bounds prompt size). */
-export const CHAT_HISTORY_TURNS = 6;
+/**
+ * Most recent conversation *messages* (user + assistant, counted individually,
+ * so 6 ≈ 3 exchanges) carried into a chat prompt to bound its size.
+ */
+export const CHAT_HISTORY_MESSAGES = 6;
 
 /** Default number of ranked results surfaced by a search. */
 export const DEFAULT_TOP_K = 20;
@@ -106,7 +127,7 @@ export const GENERATION_BACKENDS: GenerationBackend[] = ["none", "ollama", "lmst
 export function defaultSettings(): VaultSleuthSettings {
   return {
     embeddingModel: DEFAULT_EMBEDDING_MODEL,
-    useWebGPU: true,
+    localModelPath: "",
     chunkTokens: DEFAULT_CHUNK_TOKENS,
     chunkOverlap: DEFAULT_CHUNK_OVERLAP,
     hybridAlpha: DEFAULT_HYBRID_ALPHA,

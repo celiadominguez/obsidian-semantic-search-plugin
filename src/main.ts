@@ -10,14 +10,11 @@
  */
 
 import { Notice, Plugin, TFile, type WorkspaceLeaf } from "obsidian";
-import { INDEX_DEBOUNCE_MS } from "./core/config";
-import { defaultSettings } from "./core/config";
+import { INDEX_DEBOUNCE_MS, defaultSettings } from "./core/config";
 import type { VaultSleuthSettings } from "./core/types";
 import { IndexService } from "./obsidian/indexService";
 import { VaultSleuthView, VAULTSLEUTH_VIEW_TYPE, type ViewMode } from "./obsidian/VaultSleuthView";
 import { SettingsTab, type SettingsHost } from "./obsidian/SettingsTab";
-
-const DEFAULT_PLUGIN_DIR = ".obsidian/plugins/vaultsleuth";
 
 export default class VaultSleuthPlugin extends Plugin implements SettingsHost {
   public settings: VaultSleuthSettings = defaultSettings();
@@ -29,7 +26,11 @@ export default class VaultSleuthPlugin extends Plugin implements SettingsHost {
   public async onload(): Promise<void> {
     await this.loadSettings();
 
-    const pluginDir = this.manifest.dir ?? DEFAULT_PLUGIN_DIR;
+    // Obsidian sets manifest.dir for a loaded plugin; the fallback derives the
+    // path from the (user-configurable) config dir and the manifest id rather
+    // than hardcoding ".obsidian/plugins/vaultsleuth".
+    const pluginDir =
+      this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`;
     this.index = new IndexService(this.app, this.settings, pluginDir);
 
     this.registerView(VAULTSLEUTH_VIEW_TYPE, (leaf) => new VaultSleuthView(leaf, this.index));
@@ -78,11 +79,19 @@ export default class VaultSleuthPlugin extends Plugin implements SettingsHost {
 
   private async bootstrapIndex(): Promise<void> {
     const loaded = await this.index.loadPersisted();
-    if (!loaded) {
-      await this.requestReindex();
-    } else {
+    if (loaded) {
       this.setStatus(`indexed (${this.index.stats().chunks} chunks)`);
+      return;
     }
+    // First run (or a reset index): the embedding model is fetched once (~33 MB)
+    // from the Hugging Face CDN and cached on disk, then the vault is embedded
+    // on-device. Announce it up front so the one-time download isn't a surprise.
+    new Notice(
+      "VaultSleuth: first-time setup — fetching the embedding model (~33 MB, once) if needed, " +
+        "then indexing your vault on-device. This runs in the background.",
+      10000,
+    );
+    await this.requestReindex(false);
   }
 
   /** Open (or reveal) the unified view in the right sidebar, set to `mode`. */
@@ -119,15 +128,20 @@ export default class VaultSleuthPlugin extends Plugin implements SettingsHost {
     this.registerEvent(
       this.app.vault.on("delete", (file) => {
         if (file instanceof TFile && file.extension === "md") {
-          this.index.removeNote(file.path);
-          void this.index.persist();
+          void this.index
+            .removeNote(file.path)
+            .catch((error) => this.reportIndexError(error))
+            .finally(() => this.notifyIndexingState());
         }
       }),
     );
     this.registerEvent(
       this.app.vault.on("rename", (file, oldPath) => {
         if (file instanceof TFile && file.extension === "md") {
-          void this.index.renameNote(oldPath, file).then(() => this.index.persist());
+          void this.index
+            .renameNote(oldPath, file)
+            .catch((error) => this.reportIndexError(error))
+            .finally(() => this.notifyIndexingState());
         }
       }),
     );
@@ -144,22 +158,47 @@ export default class VaultSleuthPlugin extends Plugin implements SettingsHost {
   private async flushQueue(): Promise<void> {
     const paths = [...this.pendingPaths];
     this.pendingPaths.clear();
+    const files: TFile[] = [];
     for (const path of paths) {
       const file = this.app.vault.getAbstractFileByPath(path);
       if (file instanceof TFile) {
-        await this.index.indexFile(file);
+        files.push(file);
       }
     }
-    await this.index.persist();
-    this.setStatus(`indexed (${this.index.stats().chunks} chunks)`);
+    const indexing = this.index.indexFiles(files);
+    this.notifyIndexingState();
+    try {
+      await indexing;
+      this.setStatus(`indexed (${this.index.stats().chunks} chunks)`);
+    } catch (error) {
+      this.reportIndexError(error);
+    } finally {
+      this.notifyIndexingState();
+    }
   }
 
-  /** Re-embed the entire vault, surfacing progress in the status bar. */
-  public async requestReindex(): Promise<void> {
-    new Notice("Indexing vault…");
-    await this.index.reindexAll((done, total) => {
+  /**
+   * Re-embed the entire vault, surfacing progress in the status bar.
+   * `announceStart` shows the generic "Indexing vault…" notice; the first-run
+   * bootstrap sets it false because it shows its own (download-aware) notice.
+   */
+  public async requestReindex(announceStart = true): Promise<void> {
+    if (announceStart) {
+      new Notice("Indexing vault…");
+    }
+    const indexing = this.index.reindexAll((done, total) => {
       this.setStatus(`indexing ${done}/${total}`);
     });
+    this.notifyIndexingState();
+    try {
+      await indexing;
+    } catch (error) {
+      this.reportIndexError(error);
+      new Notice(`VaultSleuth: indexing failed — ${this.errorMessage(error)}`);
+      return;
+    } finally {
+      this.notifyIndexingState();
+    }
     const { chunks, notes } = this.index.stats();
     if (notes === 0) {
       this.setStatus("no notes to index");
@@ -171,6 +210,29 @@ export default class VaultSleuthPlugin extends Plugin implements SettingsHost {
 
   private setStatus(text: string): void {
     this.statusBar.setText(`VaultSleuth: ${text}`);
+  }
+
+  private errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+  }
+
+  /**
+   * Surface a background-indexing failure (e.g. the one-time embedding-model
+   * download failing) in the status bar instead of leaving it stuck mid-progress
+   * with an unhandled rejection.
+   */
+  private reportIndexError(error: unknown): void {
+    console.error("VaultSleuth: indexing failed", error);
+    this.setStatus(`indexing failed — ${this.errorMessage(error)}`);
+  }
+
+  /** Tell open views that indexing started/finished so they can warn and refresh. */
+  private notifyIndexingState(): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(VAULTSLEUTH_VIEW_TYPE)) {
+      if (leaf.view instanceof VaultSleuthView) {
+        leaf.view.onIndexingStateChanged();
+      }
+    }
   }
 
   public async loadSettings(): Promise<void> {

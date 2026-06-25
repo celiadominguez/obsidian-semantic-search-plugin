@@ -11,7 +11,7 @@
  * reusable scoring logic lives in `evaluate.ts`; this file is just I/O + the CLI.
  */
 
-import { readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
+import { readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { TransformersEmbedder } from "../src/core/embedder";
 import {
@@ -21,7 +21,7 @@ import {
   DEFAULT_HYBRID_ALPHA,
   EMBEDDING_MODELS,
 } from "../src/core/config";
-import type { NoteInput } from "../src/core/types";
+import { loadNote, readJsonl } from "./io";
 import {
   buildIndex,
   CUTOFF,
@@ -38,25 +38,6 @@ const EVAL_DIR = "eval";
 const RESULTS_DIR = join(EVAL_DIR, "results");
 const SEMANTIC_POOL = 50;
 
-/** Parse a demo-vault note file into a NoteInput keyed by its filename. */
-function loadNote(fileName: string): NoteInput {
-  const raw = readFileSync(join(DEMO_VAULT_DIR, fileName), "utf8");
-  const titleMatch = /title:\s*"([^"]+)"/.exec(raw);
-  return {
-    path: fileName,
-    title: titleMatch?.[1] ?? fileName.replace(/\.md$/, ""),
-    content: raw,
-    mtime: 0,
-  };
-}
-
-function readJsonl<T>(path: string): T[] {
-  return readFileSync(path, "utf8")
-    .split("\n")
-    .filter((line) => line.trim().length > 0)
-    .map((line) => JSON.parse(line) as T);
-}
-
 function printSummary(ranking: Record<string, MetricRow>, grounding: GroundingResult): void {
   console.log("\n=== Retrieval quality (SciFact, @10) ===");
   console.log("mode      nDCG@10   recall@10");
@@ -72,13 +53,13 @@ function printSummary(ranking: Record<string, MetricRow>, grounding: GroundingRe
 
 async function main(): Promise<void> {
   const modelId = DEFAULT_EMBEDDING_MODEL;
-  const dim = EMBEDDING_MODELS[modelId].dim;
+  const { dim, revision } = EMBEDDING_MODELS[modelId];
   console.log(`Loading embedding model ${modelId}…`);
-  const embedder = new TransformersEmbedder({ modelId, dim, useWebGPU: false });
+  const embedder = new TransformersEmbedder({ modelId, dim, revision });
 
   const files = readdirSync(DEMO_VAULT_DIR).filter((name) => name.endsWith(".md"));
   console.log(`Indexing ${files.length} notes…`);
-  const notes = files.map(loadNote);
+  const notes = files.map((fileName) => loadNote(DEMO_VAULT_DIR, fileName));
   const { store, bm25 } = await buildIndex(embedder, notes, {
     chunkTokens: DEFAULT_CHUNK_TOKENS,
     chunkOverlap: DEFAULT_CHUNK_OVERLAP,

@@ -15,9 +15,14 @@
  * Nothing here imports `obsidian`.
  */
 
-import { CHAT_HISTORY_TURNS, QA_CONTEXT_CHUNKS, QA_SIMILARITY_FLOOR } from "./config";
+import { CHAT_HISTORY_MESSAGES, QA_CONTEXT_CHUNKS, QA_SIMILARITY_FLOOR } from "./config";
 import { rank } from "./hybridRanker";
-import { REFUSAL_MESSAGE, renderContextBlock, resolveCitations } from "./qa";
+import {
+  defangDelimiters,
+  REFUSAL_MESSAGE,
+  renderContextBlock,
+  resolveCitations,
+} from "./generation";
 import type { Bm25Index } from "./bm25";
 import type { ChatMessage, Embedder, GenerationRequest, Generator, SearchResult } from "./types";
 import type { VectorStore } from "./vectorStore";
@@ -52,7 +57,7 @@ export function renderHistory(history: ChatMessage[]): string {
   }
   const lines = history.map((message) => {
     const speaker = message.role === "user" ? "User" : "Assistant";
-    return `${speaker}: ${message.content}`;
+    return `${speaker}: ${defangDelimiters(message.content)}`;
   });
   return ["<conversation>", ...lines, "</conversation>"].join("\n");
 }
@@ -92,8 +97,8 @@ interface ChatEngineDeps {
   similarityFloor?: number;
   /** Chunks retrieved per turn. */
   contextChunks?: number;
-  /** Prior turns carried into the prompt. */
-  historyTurns?: number;
+  /** Prior messages (user + assistant) carried into the prompt. */
+  historyMessages?: number;
   /** Instruction prepended to the user message before embedding (asymmetric models). */
   queryInstruction?: string;
 }
@@ -107,7 +112,7 @@ export class ChatEngine {
     this.deps = {
       similarityFloor: QA_SIMILARITY_FLOOR,
       contextChunks: QA_CONTEXT_CHUNKS,
-      historyTurns: CHAT_HISTORY_TURNS,
+      historyMessages: CHAT_HISTORY_MESSAGES,
       queryInstruction: "",
       ...deps,
     };
@@ -133,11 +138,11 @@ export class ChatEngine {
       alpha,
       similarityFloor,
       contextChunks,
-      historyTurns,
+      historyMessages,
       queryInstruction,
     } = this.deps;
 
-    const priorHistory = this.turns.slice(-historyTurns);
+    const priorHistory = this.turns.slice(-historyMessages);
     const userTurn: ChatMessage = { role: "user", content: message, citations: [], refused: false };
     this.turns.push(userTurn);
 

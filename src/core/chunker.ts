@@ -15,12 +15,32 @@
 
 import type { Chunk, NoteInput } from "./types";
 
-const FRONTMATTER_RE = /^---\r?\n(?:[\s\S]*?\r?\n)?---\r?\n?/;
+const FRONTMATTER_RE = /^---\r?\n([\s\S]*?\r?\n)?---\r?\n?/;
 const HEADING_RE = /^(#{1,6})\s+(.*)$/;
+// A line that could plausibly appear inside YAML frontmatter: a `key:` mapping,
+// a `- ` sequence item, an indented continuation, or a `#` comment. Used to tell
+// a real frontmatter block apart from a note that simply opens with a `---`
+// thematic break followed by prose and another rule.
+const YAML_LIKE_LINE_RE = /^(?:\s*#|\s*-\s|\s+\S|[A-Za-z0-9_.$-]+\s*:)/;
 
-/** Remove a leading YAML frontmatter block, if present. */
+/**
+ * Remove a leading YAML frontmatter block, if present.
+ *
+ * Only strips when the fenced block actually looks like YAML; a document that
+ * begins with a `---` thematic break (horizontal rule) around prose is left
+ * intact rather than being mistaken for frontmatter and deleted.
+ */
 export function stripFrontmatter(content: string): string {
-  return content.replace(FRONTMATTER_RE, "");
+  const match = FRONTMATTER_RE.exec(content);
+  if (match === null) {
+    return content;
+  }
+  const inner = match[1] ?? "";
+  const looksYaml = inner
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0)
+    .every((line) => YAML_LIKE_LINE_RE.test(line));
+  return looksYaml ? content.slice(match[0].length) : content;
 }
 
 interface Section {

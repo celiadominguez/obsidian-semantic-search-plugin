@@ -38,6 +38,7 @@ export class VaultSleuthView extends ItemView {
   private resetButton!: HTMLButtonElement;
   private statusEl!: HTMLElement;
   private modelEl!: HTMLElement;
+  private indexingEl!: HTMLElement;
   private searchBodyEl!: HTMLElement;
   private chatBodyEl!: HTMLElement;
 
@@ -91,6 +92,9 @@ export class VaultSleuthView extends ItemView {
 
     this.modelEl = container.createDiv({ cls: "vaultsleuth-chat-model" });
     this.statusEl = container.createDiv({ cls: "vaultsleuth-status" });
+    // Warns (in both modes) that results may be incomplete while indexing runs.
+    this.indexingEl = container.createDiv({ cls: "vaultsleuth-indexing-notice" });
+    this.indexingEl.hide();
     // Separate, persistent containers so switching modes never loses either side.
     this.searchBodyEl = container.createDiv({ cls: "vaultsleuth-body" });
     this.chatBodyEl = container.createDiv({ cls: "vaultsleuth-body" });
@@ -147,6 +151,7 @@ export class VaultSleuthView extends ItemView {
     );
     this.statusEl.setText("");
     this.updateChatChrome();
+    this.refreshIndexingNotice();
     // Toggle visibility — both bodies persist, so neither side is ever lost.
     this.searchBodyEl.toggle(mode === "search");
     this.chatBodyEl.toggle(mode === "chat");
@@ -194,6 +199,29 @@ export class VaultSleuthView extends ItemView {
     }
   }
 
+  /** Show/hide the "still indexing" warning to match the current index state. */
+  private refreshIndexingNotice(): void {
+    const indexing = this.index.isIndexing;
+    this.indexingEl.toggle(indexing);
+    if (indexing) {
+      this.indexingEl.setText(
+        "⏳ Still indexing your vault — results may be incomplete until indexing finishes.",
+      );
+    }
+  }
+
+  /**
+   * Called by the plugin when background indexing starts or finishes. Refresh the
+   * warning, and if a search is on screen re-run it so results fill in as the
+   * index completes — otherwise an empty mid-index search reads as "no matches".
+   */
+  public onIndexingStateChanged(): void {
+    this.refreshIndexingNotice();
+    if (this.mode === "search" && this.inputEl.value.trim().length > 0) {
+      void this.runSearch();
+    }
+  }
+
   private renderSearchEmpty(): void {
     this.searchBodyEl.empty();
     this.searchBodyEl.createDiv({
@@ -224,6 +252,7 @@ export class VaultSleuthView extends ItemView {
   }
 
   private async runSearch(): Promise<void> {
+    this.refreshIndexingNotice();
     const query = this.inputEl.value.trim();
     if (query.length === 0) {
       this.renderSearchEmpty();
@@ -256,7 +285,12 @@ export class VaultSleuthView extends ItemView {
     this.statusEl.setText(`${results.length} result${results.length === 1 ? "" : "s"}`);
     this.searchBodyEl.empty();
     if (results.length === 0) {
-      this.searchBodyEl.createDiv({ cls: "vaultsleuth-empty", text: "No matches found." });
+      this.searchBodyEl.createDiv({
+        cls: "vaultsleuth-empty",
+        text: this.index.isIndexing
+          ? "No matches yet — your vault is still indexing. Results will appear as it finishes."
+          : "No matches found.",
+      });
       return;
     }
     for (const result of results) {
@@ -317,6 +351,7 @@ export class VaultSleuthView extends ItemView {
     }
     this.sending = true;
     this.inputEl.value = "";
+    this.refreshIndexingNotice();
     if (this.chatBodyEl.querySelector(".vaultsleuth-empty") !== null) {
       this.chatBodyEl.empty();
     }

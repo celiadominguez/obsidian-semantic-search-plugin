@@ -17,7 +17,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { HashingEmbedder } from "../src/core/embedder";
 import { defaultSettings } from "../src/core/config";
-import { NoneGenerator } from "../src/core/qa";
+import { NoneGenerator } from "../src/core/generation";
 import { ChatEngine } from "../src/core/chat";
 import { VectorStore } from "../src/core/vectorStore";
 import { rank } from "../src/core/hybridRanker";

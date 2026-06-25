@@ -18,6 +18,7 @@
     "dev": "node esbuild.config.mjs",
     "eval": "tsx eval/run_eval.ts",
     "build-demo-vault": "tsx scripts/build_demo_vault.ts",
+    "clean:demo-index": "tsx scripts/clean_demo_index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",

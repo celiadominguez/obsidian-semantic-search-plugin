@@ -13,7 +13,12 @@ export type GenerationBackend = "none" | "ollama" | "lmstudio" | "hosted";
 /** Persisted, user-facing configuration. Every key has a default (see config.ts). */
 export interface VaultSleuthSettings {
   embeddingModel: EmbeddingModelId;
-  useWebGPU: boolean;
+  /**
+   * Optional vault folder holding the embedding model's files (laid out as
+   * `<folder>/<model id>/…`). When set, the model is loaded from disk and never
+   * downloaded — an opt-in, fully-offline path. Empty means download once.
+   */
+  localModelPath: string;
   chunkTokens: number;
   chunkOverlap: number;
   hybridAlpha: number;

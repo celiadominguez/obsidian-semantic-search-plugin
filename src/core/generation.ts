@@ -25,16 +25,59 @@ export const REFUSAL_MESSAGE =
 
 const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
 
+/** Prompt framing tags that untrusted text must never be able to close. */
+const RESERVED_DELIMITER_RE = /<(\/?)(context|conversation)>/gi;
+
+/**
+ * Neutralize prompt-framing delimiters embedded in untrusted text (note content
+ * or prior messages). Without this, a chunk literally containing `</context>`
+ * could close the framing block early and have the text after it read as
+ * instructions rather than data. Escaping the angle brackets keeps the text
+ * readable while making the tokens inert.
+ */
+export function defangDelimiters(text: string): string {
+  return text.replace(RESERVED_DELIMITER_RE, (_match, slash: string, tag: string) => {
+    return `&lt;${slash}${tag}&gt;`;
+  });
+}
+
+/** Path without the `.md` extension — what an Obsidian `[[link]]` uses. */
+function pathWithoutExt(notePath: string): string {
+  return notePath.replace(/\.md$/i, "");
+}
+
+/**
+ * A stable, unambiguous citation label for each note in the context set. A note
+ * gets its plain basename unless another context note shares that basename, in
+ * which case it gets its full path (without extension) so the two never collide.
+ */
+function citationLabels(context: SearchResult[]): Map<string, string> {
+  const paths = [...new Set(context.map((r) => r.chunk.notePath))];
+  const basenameCounts = new Map<string, number>();
+  for (const path of paths) {
+    const key = noteBasename(path).toLowerCase();
+    basenameCounts.set(key, (basenameCounts.get(key) ?? 0) + 1);
+  }
+  const labels = new Map<string, string>();
+  for (const path of paths) {
+    const base = noteBasename(path);
+    const ambiguous = (basenameCounts.get(base.toLowerCase()) ?? 0) > 1;
+    labels.set(path, ambiguous ? pathWithoutExt(path) : base);
+  }
+  return labels;
+}
+
 /**
  * Render retrieved chunks as a delimited, injection-safe context block. Each
- * chunk is numbered and tagged with its note name; callers wrap this in
+ * chunk is numbered and tagged with a unique note label; callers wrap this in
  * `<context>` tags and frame it as untrusted data.
  */
 export function renderContextBlock(context: SearchResult[]): string {
+  const labels = citationLabels(context);
   return context
     .map((result, i) => {
-      const tag = `[${i + 1}] note: ${noteBasename(result.chunk.notePath)}`;
-      return `${tag}\n${result.chunk.text}`;
+      const tag = `[${i + 1}] note: ${labels.get(result.chunk.notePath)}`;
+      return `${tag}\n${defangDelimiters(result.chunk.text)}`;
     })
     .join("\n---\n");
 }
@@ -50,19 +93,26 @@ function extractWikilinks(text: string): string[] {
 
 /**
  * Resolve the citations in an answer to real note paths drawn from the context.
- * Citations that do not match any context note are dropped, so the result only
- * ever points at notes that actually exist.
+ * Matches the unique labels emitted by {@link renderContextBlock}, and also a
+ * bare basename when it is unambiguous; citations that match no context note —
+ * or an ambiguous bare basename — are dropped, so results only ever point at a
+ * single real note.
  */
 export function resolveCitations(answer: string, context: SearchResult[]): string[] {
-  const byBasename = new Map<string, string>();
-  for (const result of context) {
-    byBasename.set(noteBasename(result.chunk.notePath).toLowerCase(), result.chunk.notePath);
+  const labels = citationLabels(context);
+  const byLabel = new Map<string, string>();
+  const byBasename = new Map<string, string | null>();
+  for (const [path, label] of labels) {
+    byLabel.set(label.toLowerCase(), path);
+    const base = noteBasename(path).toLowerCase();
+    byBasename.set(base, byBasename.has(base) ? null : path);
   }
   const resolved: string[] = [];
   const seen = new Set<string>();
   for (const name of extractWikilinks(answer)) {
-    const path = byBasename.get(name.toLowerCase());
-    if (path !== undefined && !seen.has(path)) {
+    const key = name.toLowerCase();
+    const path = byLabel.get(key) ?? byBasename.get(key) ?? undefined;
+    if (path !== undefined && path !== null && !seen.has(path)) {
       seen.add(path);
       resolved.push(path);
     }

@@ -52,19 +52,29 @@ interface HnswIndex {
   ): { neighbors: number[]; distances: number[] };
 }
 
+/** Spare capacity built into a fresh graph so later inserts avoid a rebuild. */
+const HNSW_GROWTH = 1.5;
+const HNSW_MIN_HEADROOM = 1024;
+
 /** Lazily-loaded HNSW searcher. Isolated so a WASM failure can be caught cleanly. */
 class HnswSearcher {
   private readonly index: HnswIndex;
   private readonly labelToId = new Map<number, string>();
+  private nextLabel: number;
+  private readonly capacity: number;
 
-  private constructor(index: HnswIndex, labelToId: Map<number, string>) {
+  private constructor(index: HnswIndex, labelToId: Map<number, string>, capacity: number) {
     this.index = index;
     this.labelToId = labelToId;
+    this.nextLabel = labelToId.size;
+    this.capacity = capacity;
   }
 
   /**
-   * Build an HNSW graph over the given records. Returns `null` if `hnswlib-wasm`
-   * cannot be loaded or initialized, signalling the caller to use exact cosine.
+   * Build an HNSW graph over the given records, with spare capacity so later
+   * single inserts can be added without rebuilding. Returns `null` if
+   * `hnswlib-wasm` cannot be loaded or initialized, signalling the caller to use
+   * exact cosine.
    */
   public static async build(
     records: VectorRecord[],
@@ -77,17 +87,40 @@ class HnswSearcher {
         HierarchicalNSW: new (space: string, dim: number) => HnswIndex;
       };
       const index = new module.HierarchicalNSW("cosine", dim);
-      index.initIndex(records.length, params.m, params.efConstruction, 200);
+      const capacity = Math.max(
+        Math.ceil(records.length * HNSW_GROWTH),
+        records.length + HNSW_MIN_HEADROOM,
+      );
+      index.initIndex(capacity, params.m, params.efConstruction, 200);
       index.setEfSearch(params.efSearch);
       const labelToId = new Map<number, string>();
       records.forEach((record, label) => {
         index.addPoint(Array.from(record.vector), label, false);
         labelToId.set(label, record.chunk.id);
       });
-      return new HnswSearcher(index, labelToId);
+      return new HnswSearcher(index, labelToId, capacity);
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Add one new point to the existing graph. Returns false when at capacity (the
+   * caller then rebuilds). Only valid for genuinely new ids — hnswlib cannot
+   * update a label in place.
+   */
+  public tryAddPoint(record: VectorRecord): boolean {
+    if (this.nextLabel >= this.capacity) {
+      return false;
+    }
+    try {
+      this.index.addPoint(Array.from(record.vector), this.nextLabel, false);
+    } catch {
+      return false;
+    }
+    this.labelToId.set(this.nextLabel, record.chunk.id);
+    this.nextLabel++;
+    return true;
   }
 
   public search(query: Float32Array, topK: number): SemanticHit[] {
@@ -159,6 +192,7 @@ export class VectorStore {
         `Vector dimension ${record.vector.length} does not match store dimension ${this.dim}`,
       );
     }
+    const isReplace = this.records.has(record.chunk.id);
     this.records.set(record.chunk.id, record);
     let set = this.byNote.get(record.chunk.notePath);
     if (set === undefined) {
@@ -166,7 +200,15 @@ export class VectorStore {
       this.byNote.set(record.chunk.notePath, set);
     }
     set.add(record.chunk.id);
-    this.hnswDirty = true;
+    // Keep a live HNSW graph current cheaply: a genuinely new chunk is added in
+    // place; a replacement (hnswlib can't update a label) forces a later rebuild.
+    if (this.hnsw !== null && !this.hnswDirty) {
+      if (isReplace || !this.hnsw.tryAddPoint(record)) {
+        this.hnswDirty = true;
+      }
+    } else if (this.hnsw === null) {
+      this.hnswDirty = true;
+    }
   }
 
   /** Remove a single chunk by id. */

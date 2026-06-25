@@ -7,8 +7,13 @@
  */
 
 import { type Plugin, PluginSettingTab, Setting } from "obsidian";
-import { EMBEDDING_MODELS, GENERATION_BACKENDS } from "../core/config";
-import { listOllamaModels, listOpenAiModels } from "../core/qa";
+import {
+  EMBEDDING_MODELS,
+  GENERATION_BACKENDS,
+  MAX_CHUNK_TOKENS,
+  MAX_HNSW_THRESHOLD,
+} from "../core/config";
+import { listOllamaModels, listOpenAiModels } from "../core/generation";
 import { obsidianHttpClient } from "./obsidianHttp";
 import type { EmbeddingModelId, GenerationBackend, VaultSleuthSettings } from "../core/types";
 
@@ -50,25 +55,41 @@ export class SettingsTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("Use WebGPU")
-      .setDesc("Accelerate embedding with WebGPU when available. Falls back to WASM automatically.")
-      .addToggle((toggle) =>
-        toggle.setValue(settings.useWebGPU).onChange(async (value) => {
-          settings.useWebGPU = value;
-          await this.host.saveSettings();
-        }),
+      .setName("Local model folder (offline, advanced)")
+      .setDesc(
+        "Optional. A vault folder containing the model files, laid out as " +
+          "<folder>/<model id>/… (e.g. onnx/model_quantized.onnx, config.json, " +
+          "tokenizer.json). When set, the model loads from disk and is never " +
+          "downloaded. Leave empty to download it once from Hugging Face. " +
+          "Experimental — re-index and confirm search still works after setting it.",
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("e.g. models")
+          .setValue(settings.localModelPath)
+          .onChange(async (value) => {
+            settings.localModelPath = value.trim();
+            await this.host.saveSettings();
+          }),
       );
 
     new Setting(containerEl).setName("Chunking").setHeading();
 
     new Setting(containerEl)
       .setName("Chunk size (tokens)")
-      .setDesc('Approximate tokens per chunk. Takes effect on the next "Re-index vault".')
+      .setDesc(
+        `Approximate tokens per chunk (max ${MAX_CHUNK_TOKENS}). ` +
+          'Takes effect on the next "Re-index vault".',
+      )
       .addText((text) =>
         text.setValue(String(settings.chunkTokens)).onChange(async (value) => {
           const parsed = Number.parseInt(value, 10);
           if (Number.isFinite(parsed) && parsed > 0) {
-            settings.chunkTokens = parsed;
+            const clamped = Math.min(parsed, MAX_CHUNK_TOKENS);
+            settings.chunkTokens = clamped;
+            if (clamped !== parsed) {
+              text.setValue(String(clamped));
+            }
             await this.host.saveSettings();
           }
         }),
@@ -81,7 +102,11 @@ export class SettingsTab extends PluginSettingTab {
         text.setValue(String(settings.chunkOverlap)).onChange(async (value) => {
           const parsed = Number.parseInt(value, 10);
           if (Number.isFinite(parsed) && parsed >= 0) {
-            settings.chunkOverlap = parsed;
+            const clamped = Math.min(parsed, MAX_CHUNK_TOKENS);
+            settings.chunkOverlap = clamped;
+            if (clamped !== parsed) {
+              text.setValue(String(clamped));
+            }
             await this.host.saveSettings();
           }
         }),
@@ -112,7 +137,11 @@ export class SettingsTab extends PluginSettingTab {
         text.setValue(String(settings.hnswThreshold)).onChange(async (value) => {
           const parsed = Number.parseInt(value, 10);
           if (Number.isFinite(parsed) && parsed > 0) {
-            settings.hnswThreshold = parsed;
+            const clamped = Math.min(parsed, MAX_HNSW_THRESHOLD);
+            settings.hnswThreshold = clamped;
+            if (clamped !== parsed) {
+              text.setValue(String(clamped));
+            }
             await this.host.saveSettings();
           }
         }),

@@ -19,10 +19,11 @@ import { embedInput, lexicalInput } from "../core/indexSurface";
 import { hashText } from "../core/hash";
 import { rank } from "../core/hybridRanker";
 import { TransformersEmbedder } from "../core/embedder";
-import { createGenerator } from "../core/qa";
+import { createGenerator } from "../core/generation";
 import { ChatEngine } from "../core/chat";
 import { Bm25Index } from "../core/bm25";
 import { obsidianHttpClient } from "./obsidianHttp";
+import { ortWasmBinary } from "./ortWasm";
 import { SIDECAR_VERSION, VectorStore, type VectorSidecar } from "../core/vectorStore";
 import { EMBEDDING_MODELS, type EmbeddingModelInfo } from "../core/config";
 import type { NoteInput, RankingMode, SearchResult, VaultSleuthSettings } from "../core/types";
@@ -47,8 +48,12 @@ export class IndexService {
   private readonly pluginDir: string;
   private embedder: TransformersEmbedder;
   private store: VectorStore;
-  private readonly bm25 = new Bm25Index();
-  private readonly indexedNotes = new Set<string>();
+  private bm25 = new Bm25Index();
+  private indexedNotes = new Set<string>();
+  /** Serializes all index mutations + persistence so they never interleave. */
+  private writeChain: Promise<unknown> = Promise.resolve();
+  /** Count of index mutations queued or in flight; drives {@link isIndexing}. */
+  private activeMutations = 0;
 
   constructor(app: App, settings: VaultSleuthSettings, pluginDir: string) {
     this.app = app;
@@ -63,11 +68,33 @@ export class IndexService {
   }
 
   private createEmbedder(): TransformersEmbedder {
+    const localModelPath = this.settings.localModelPath.trim();
     return new TransformersEmbedder({
       modelId: this.settings.embeddingModel,
       dim: this.modelDim(),
-      useWebGPU: this.settings.useWebGPU,
+      revision: EMBEDDING_MODELS[this.settings.embeddingModel].revision,
+      // The ORT WASM engine is inlined into main.js (see ortWasm.ts); handing the
+      // bytes to the embedder keeps onnxruntime-web from fetching it from a CDN.
+      getWasmBinary: () => Promise.resolve(ortWasmBinary()),
+      // Opt-in fully-offline path: load model files from a vault folder instead
+      // of downloading them. Only wired up when the user configured a folder.
+      readLocalModelFile:
+        localModelPath.length > 0
+          ? (relativePath) => this.readLocalModelFile(localModelPath, relativePath)
+          : undefined,
     });
+  }
+
+  /** Read a model file from the user's local model folder, or undefined if absent. */
+  private async readLocalModelFile(
+    folder: string,
+    relativePath: string,
+  ): Promise<ArrayBuffer | undefined> {
+    try {
+      return await this.app.vault.adapter.readBinary(`${folder}/${relativePath}`);
+    } catch {
+      return undefined;
+    }
   }
 
   private createStore(): VectorStore {
@@ -81,11 +108,11 @@ export class IndexService {
   /** Apply updated settings; a model change requires a full re-index by the caller. */
   public updateSettings(settings: VaultSleuthSettings): void {
     const modelChanged = settings.embeddingModel !== this.settings.embeddingModel;
-    const accelChanged = settings.useWebGPU !== this.settings.useWebGPU;
+    // Switching the model source (download ⇄ local folder) produces the same
+    // vectors, so it only needs a fresh embedder, not a re-index.
+    const sourceChanged = settings.localModelPath !== this.settings.localModelPath;
     this.settings = settings;
-    // A WebGPU toggle only needs a fresh embedder (the pipeline caches its device);
-    // a model change additionally invalidates the stored vectors.
-    if (modelChanged || accelChanged) {
+    if (modelChanged || sourceChanged) {
       this.embedder = this.createEmbedder();
     }
     if (modelChanged) {
@@ -160,8 +187,38 @@ export class IndexService {
     }
   }
 
+  /**
+   * Run an index mutation exclusively: it starts only after any in-flight
+   * mutation finishes, so re-index, incremental edits, deletes, and renames
+   * never interleave on the shared store/BM25 (and persistence stays atomic).
+   */
+  private runExclusive<T>(op: () => Promise<T>): Promise<T> {
+    this.activeMutations++;
+    const result = this.writeChain.then(op, op);
+    this.writeChain = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    const settle = (): void => {
+      this.activeMutations--;
+    };
+    // Decrement on settle without rethrowing, so the caller still sees the
+    // original result (and its rejection) but this bookkeeping never leaks one.
+    result.then(settle, settle);
+    return result;
+  }
+
+  /**
+   * Whether a (re)index is queued or running. Search/chat still work while true,
+   * but over a not-yet-complete index — the UI uses this to warn that results may
+   * be incomplete until indexing finishes.
+   */
+  public get isIndexing(): boolean {
+    return this.activeMutations > 0;
+  }
+
   /** Persist the current index (vectors blob + JSON sidecar). */
-  public async persist(): Promise<void> {
+  private async persistIndex(): Promise<void> {
     const adapter = this.app.vault.adapter;
     if (!(await adapter.exists(this.pluginDir))) {
       await adapter.mkdir(this.pluginDir);
@@ -171,17 +228,22 @@ export class IndexService {
     await adapter.write(this.sidecarPath(), JSON.stringify(sidecar));
   }
 
-  /** Index (or re-index) a single note incrementally using content hashes. */
-  private async indexNote(note: NoteInput): Promise<void> {
+  /** Incrementally (re)index one note into the given store/BM25/set by hash diff. */
+  private async indexNoteInto(
+    note: NoteInput,
+    store: VectorStore,
+    bm25: Bm25Index,
+    indexed: Set<string>,
+  ): Promise<void> {
     const chunks = chunkNote(note, this.settings.chunkTokens, this.settings.chunkOverlap);
     const hashes = new Map(chunks.map((chunk) => [chunk.id, hashText(chunk.text)]));
-    const existing = this.store.hashesForNote(note.path);
+    const existing = store.hashesForNote(note.path);
 
     // Remove chunks that no longer exist in the note.
     for (const id of existing.keys()) {
       if (!hashes.has(id)) {
-        this.store.remove(id);
-        this.bm25.remove(id);
+        store.remove(id);
+        bm25.remove(id);
       }
     }
 
@@ -191,52 +253,94 @@ export class IndexService {
       const batch = changed.slice(i, i + EMBED_BATCH_SIZE);
       const vectors = await this.embedder.embed(batch.map(embedInput));
       batch.forEach((chunk, j) => {
-        this.store.upsert({ chunk, hash: hashes.get(chunk.id) as string, vector: vectors[j] });
-        this.bm25.add(chunk.id, lexicalInput(chunk));
+        store.upsert({ chunk, hash: hashes.get(chunk.id) as string, vector: vectors[j] });
+        bm25.add(chunk.id, lexicalInput(chunk));
       });
     }
 
     if (chunks.length > 0) {
-      this.indexedNotes.add(note.path);
+      indexed.add(note.path);
     } else {
-      this.indexedNotes.delete(note.path);
+      indexed.delete(note.path);
     }
   }
 
-  /** Index a file by path (used by vault change events). */
-  public async indexFile(file: TFile): Promise<void> {
-    if (this.isExcluded(file.path)) {
-      return;
+  /** Drop a note's chunks from the given store/BM25/set. */
+  private removeNoteFrom(
+    path: string,
+    store: VectorStore,
+    bm25: Bm25Index,
+    indexed: Set<string>,
+  ): void {
+    for (const id of store.hashesForNote(path).keys()) {
+      bm25.remove(id);
     }
-    await this.indexNote(await this.toNoteInput(file));
+    store.removeNote(path);
+    indexed.delete(path);
   }
 
-  /** Drop a note's chunks from the index (delete event). */
-  public removeNote(path: string): void {
-    for (const id of this.store.hashesForNote(path).keys()) {
-      this.bm25.remove(id);
-    }
-    this.store.removeNote(path);
-    this.indexedNotes.delete(path);
+  /** Incrementally index a batch of changed files, then persist (serialized). */
+  public indexFiles(files: TFile[]): Promise<void> {
+    return this.runExclusive(async () => {
+      for (const file of files) {
+        if (this.isExcluded(file.path)) {
+          continue;
+        }
+        await this.indexNoteInto(
+          await this.toNoteInput(file),
+          this.store,
+          this.bm25,
+          this.indexedNotes,
+        );
+      }
+      await this.persistIndex();
+    });
   }
 
-  /** Handle a rename: drop the old path and index the new file. */
-  public async renameNote(oldPath: string, file: TFile): Promise<void> {
-    this.removeNote(oldPath);
-    await this.indexFile(file);
+  /** Drop a note's chunks and persist (serialized; for delete events). */
+  public removeNote(path: string): Promise<void> {
+    return this.runExclusive(async () => {
+      this.removeNoteFrom(path, this.store, this.bm25, this.indexedNotes);
+      await this.persistIndex();
+    });
   }
 
-  /** Full (re)index of every eligible note, reporting progress. */
-  public async reindexAll(onProgress?: ProgressCallback): Promise<void> {
-    this.store.clear();
-    this.bm25.clear();
-    this.indexedNotes.clear();
-    const files = this.indexableFiles();
-    for (let i = 0; i < files.length; i++) {
-      await this.indexFile(files[i]);
-      onProgress?.(i + 1, files.length);
-    }
-    await this.persist();
+  /** Handle a rename: drop the old path, index the new file, persist (serialized). */
+  public renameNote(oldPath: string, file: TFile): Promise<void> {
+    return this.runExclusive(async () => {
+      this.removeNoteFrom(oldPath, this.store, this.bm25, this.indexedNotes);
+      if (!this.isExcluded(file.path)) {
+        await this.indexNoteInto(
+          await this.toNoteInput(file),
+          this.store,
+          this.bm25,
+          this.indexedNotes,
+        );
+      }
+      await this.persistIndex();
+    });
+  }
+
+  /**
+   * Full (re)index into a fresh index that is swapped in atomically once built,
+   * then persisted — all serialized. A concurrent search therefore sees either
+   * the previous complete index or the new one, never a half-cleared store.
+   */
+  public reindexAll(onProgress?: ProgressCallback): Promise<void> {
+    return this.runExclusive(async () => {
+      const store = this.createStore();
+      const bm25 = new Bm25Index();
+      const indexed = new Set<string>();
+      const files = this.indexableFiles();
+      for (let i = 0; i < files.length; i++) {
+        await this.indexNoteInto(await this.toNoteInput(files[i]), store, bm25, indexed);
+        onProgress?.(i + 1, files.length);
+      }
+      this.store = store;
+      this.bm25 = bm25;
+      this.indexedNotes = indexed;
+      await this.persistIndex();
+    });
   }
 
   /** Per-model retrieval configuration (query instruction + refusal floor). */

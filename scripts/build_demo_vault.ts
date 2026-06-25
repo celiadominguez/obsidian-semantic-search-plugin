@@ -25,6 +25,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { readJsonl } from "../eval/io";
 
 const DATA_DIR = join("scripts", "data");
 const SCIFACT_DIR = join(DATA_DIR, "scifact");
@@ -50,14 +51,6 @@ interface WikiQaRow {
   document_title: string;
   answer: string;
   label: number;
-}
-
-function readJsonl<T>(path: string): T[] {
-  return readFileSync(path, "utf8")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line) => JSON.parse(line) as T);
 }
 
 /** Slugify a title into a filesystem- and wikilink-friendly stem. */
