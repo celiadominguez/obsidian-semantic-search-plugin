@@ -37,7 +37,6 @@ export class VaultSeekView extends ItemView {
   private primaryButton!: HTMLButtonElement;
   private resetButton!: HTMLButtonElement;
   private statusEl!: HTMLElement;
-  private bannerEl!: HTMLElement;
   private modelEl!: HTMLElement;
   private searchBodyEl!: HTMLElement;
   private chatBodyEl!: HTMLElement;
@@ -74,7 +73,11 @@ export class VaultSeekView extends ItemView {
     this.resetButton = header.createEl("button", { text: "New chat", cls: "vaultseek-reset" });
 
     this.searchTab.addEventListener("click", () => this.setMode("search"));
-    this.chatTab.addEventListener("click", () => this.setMode("chat"));
+    this.chatTab.addEventListener("click", () => {
+      if (this.chatAvailable()) {
+        this.setMode("chat");
+      }
+    });
     this.resetButton.addEventListener("click", () => this.resetConversation());
 
     const inputRow = container.createDiv({ cls: "vaultseek-search-row" });
@@ -85,7 +88,6 @@ export class VaultSeekView extends ItemView {
     this.primaryButton = inputRow.createEl("button", { text: "Search", cls: "mod-cta" });
 
     this.modelEl = container.createDiv({ cls: "vaultseek-chat-model" });
-    this.bannerEl = container.createDiv({ cls: "vaultseek-chat-banner" });
     this.statusEl = container.createDiv({ cls: "vaultseek-status" });
     // Separate, persistent containers so switching modes never loses either side.
     this.searchBodyEl = container.createDiv({ cls: "vaultseek-body" });
@@ -113,8 +115,17 @@ export class VaultSeekView extends ItemView {
     }
   }
 
+  /** Whether chat is usable — only when a generative backend (not `none`) is set. */
+  private chatAvailable(): boolean {
+    return this.index.hasGenerativeBackend;
+  }
+
   /** Switch the active mode, swapping in that mode's own input draft. */
   public setMode(mode: ViewMode): void {
+    // Chat needs a model; without one, fall back to search.
+    if (mode === "chat" && !this.chatAvailable()) {
+      mode = "search";
+    }
     // Stash the outgoing mode's draft and restore the incoming mode's.
     this.drafts[this.mode] = this.inputEl.value;
     this.mode = mode;
@@ -128,7 +139,7 @@ export class VaultSeekView extends ItemView {
       mode === "chat" ? "Ask a question about your notes…" : "Search your vault by meaning…",
     );
     this.statusEl.setText("");
-    this.refreshBanner();
+    this.updateChatChrome();
     // Toggle visibility — both bodies persist, so neither side is ever lost.
     this.searchBodyEl.toggle(mode === "search");
     this.chatBodyEl.toggle(mode === "chat");
@@ -141,23 +152,27 @@ export class VaultSeekView extends ItemView {
     this.inputEl.focus();
   }
 
-  private refreshBanner(): void {
-    const isChat = this.mode === "chat";
-    if (isChat) {
+  /**
+   * Reflect the configured backend: enable/disable the Chat tab and show the
+   * active model. Called by the plugin when settings change so the tab updates
+   * live, and on every mode switch.
+   */
+  public updateChatChrome(): void {
+    const canChat = this.chatAvailable();
+    this.chatTab.toggleClass("is-disabled", !canChat);
+    this.chatTab.setAttribute(
+      "title",
+      canChat ? "" : "Set a local (Ollama / LM Studio) or hosted model in settings to chat",
+    );
+    if (!canChat && this.mode === "chat") {
+      this.setMode("search");
+      return;
+    }
+    if (this.mode === "chat") {
       this.modelEl.show();
       this.modelEl.setText(`Answering with: ${this.index.generationSummary}`);
     } else {
       this.modelEl.hide();
-    }
-    if (isChat && !this.index.hasGenerativeBackend) {
-      this.bannerEl.show();
-      this.bannerEl.setText(
-        "Offline mode: replies show the most relevant passages from your notes. " +
-          "Enable a local (Ollama / LM Studio) or hosted backend in settings for " +
-          "conversational answers.",
-      );
-    } else {
-      this.bannerEl.hide();
     }
   }
 
@@ -251,7 +266,7 @@ export class VaultSeekView extends ItemView {
 
   private resetConversation(): void {
     this.chatEngine = this.index.createChatEngine();
-    this.refreshBanner();
+    this.updateChatChrome();
     this.renderChatEmpty();
     this.inputEl.focus();
   }

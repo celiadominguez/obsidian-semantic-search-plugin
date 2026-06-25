@@ -168,5 +168,11 @@ export default class VaultSeekPlugin extends Plugin implements SettingsHost {
   public async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
     this.index?.updateSettings(this.settings);
+    // Reflect backend changes (e.g. enabling/disabling chat) in any open view.
+    for (const leaf of this.app.workspace.getLeavesOfType(VAULTSEEK_VIEW_TYPE)) {
+      if (leaf.view instanceof VaultSeekView) {
+        leaf.view.updateChatChrome();
+      }
+    }
   }
 }

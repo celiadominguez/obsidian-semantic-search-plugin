@@ -41,6 +41,11 @@
   font-weight: var(--font-semibold);
 }
 
+.vaultseek-tab.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .vaultseek-reset {
   font-size: var(--font-ui-smaller);
 }
@@ -136,14 +141,6 @@
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
   padding: var(--size-2-1) 0;
-}
-
-.vaultseek-chat-banner {
-  font-size: var(--font-ui-smaller);
-  color: var(--text-muted);
-  background: var(--background-secondary);
-  border-radius: var(--radius-s);
-  padding: var(--size-4-2);
 }
 
 .vaultseek-chat-message {
