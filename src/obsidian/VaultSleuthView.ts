@@ -1,5 +1,5 @@
 /**
- * The unified VaultSeek panel: a single sidebar view with a Search ⇄ Chat toggle
+ * The unified VaultSleuth panel: a single sidebar view with a Search ⇄ Chat toggle
  * sharing one input box.
  *
  *  - **Search** mode is pure find-and-navigate: ranked results with scores,
@@ -19,12 +19,12 @@ import type { ChatMessage, SearchResult } from "../core/types";
 import type { IndexService } from "./indexService";
 
 /** Stable view type id used to register and reveal the view. */
-export const VAULTSEEK_VIEW_TYPE = "vaultseek-view";
+export const VAULTSLEUTH_VIEW_TYPE = "vaultsleuth-view";
 
 /** Which mode the shared panel is showing. */
 export type ViewMode = "search" | "chat";
 
-export class VaultSeekView extends ItemView {
+export class VaultSleuthView extends ItemView {
   private readonly index: IndexService;
   private mode: ViewMode = "search";
   private chatEngine: ChatEngine | null = null;
@@ -50,11 +50,11 @@ export class VaultSeekView extends ItemView {
   }
 
   public getViewType(): string {
-    return VAULTSEEK_VIEW_TYPE;
+    return VAULTSLEUTH_VIEW_TYPE;
   }
 
   public getDisplayText(): string {
-    return "VaultSeek";
+    return "VaultSleuth";
   }
 
   public getIcon(): string {
@@ -64,13 +64,13 @@ export class VaultSeekView extends ItemView {
   public async onOpen(): Promise<void> {
     const container = this.contentEl;
     container.empty();
-    container.addClass("vaultseek-view");
+    container.addClass("vaultsleuth-view");
 
-    const header = container.createDiv({ cls: "vaultseek-header" });
-    const tabs = header.createDiv({ cls: "vaultseek-tabs" });
-    this.searchTab = tabs.createEl("button", { text: "Search", cls: "vaultseek-tab" });
-    this.chatTab = tabs.createEl("button", { text: "Chat", cls: "vaultseek-tab" });
-    this.resetButton = header.createEl("button", { text: "New chat", cls: "vaultseek-reset" });
+    const header = container.createDiv({ cls: "vaultsleuth-header" });
+    const tabs = header.createDiv({ cls: "vaultsleuth-tabs" });
+    this.searchTab = tabs.createEl("button", { text: "Search", cls: "vaultsleuth-tab" });
+    this.chatTab = tabs.createEl("button", { text: "Chat", cls: "vaultsleuth-tab" });
+    this.resetButton = header.createEl("button", { text: "New chat", cls: "vaultsleuth-reset" });
 
     this.searchTab.addEventListener("click", () => this.setMode("search"));
     this.chatTab.addEventListener("click", () => {
@@ -80,18 +80,18 @@ export class VaultSeekView extends ItemView {
     });
     this.resetButton.addEventListener("click", () => this.resetConversation());
 
-    const inputRow = container.createDiv({ cls: "vaultseek-search-row" });
+    const inputRow = container.createDiv({ cls: "vaultsleuth-search-row" });
     this.inputEl = inputRow.createEl("textarea", {
-      cls: "vaultseek-input",
+      cls: "vaultsleuth-input",
       attr: { rows: "1", placeholder: "Search your vault by meaning…" },
     });
     this.primaryButton = inputRow.createEl("button", { text: "Search", cls: "mod-cta" });
 
-    this.modelEl = container.createDiv({ cls: "vaultseek-chat-model" });
-    this.statusEl = container.createDiv({ cls: "vaultseek-status" });
+    this.modelEl = container.createDiv({ cls: "vaultsleuth-chat-model" });
+    this.statusEl = container.createDiv({ cls: "vaultsleuth-status" });
     // Separate, persistent containers so switching modes never loses either side.
-    this.searchBodyEl = container.createDiv({ cls: "vaultseek-body" });
-    this.chatBodyEl = container.createDiv({ cls: "vaultseek-body" });
+    this.searchBodyEl = container.createDiv({ cls: "vaultsleuth-body" });
+    this.chatBodyEl = container.createDiv({ cls: "vaultsleuth-body" });
 
     this.inputEl.addEventListener("input", () => {
       if (this.mode === "search") {
@@ -179,7 +179,7 @@ export class VaultSeekView extends ItemView {
   private renderSearchEmpty(): void {
     this.searchBodyEl.empty();
     this.searchBodyEl.createDiv({
-      cls: "vaultseek-empty",
+      cls: "vaultsleuth-empty",
       text: "Type to search your vault semantically.",
     });
   }
@@ -187,7 +187,7 @@ export class VaultSeekView extends ItemView {
   private renderChatEmpty(): void {
     this.chatBodyEl.empty();
     this.chatBodyEl.createDiv({
-      cls: "vaultseek-empty",
+      cls: "vaultsleuth-empty",
       text: "Ask anything — answers are grounded in your notes and cite their sources.",
     });
   }
@@ -222,7 +222,7 @@ export class VaultSeekView extends ItemView {
       this.statusEl.setText("");
       this.searchBodyEl.empty();
       this.searchBodyEl.createDiv({
-        cls: "vaultseek-empty",
+        cls: "vaultsleuth-empty",
         text: `Search failed: ${error instanceof Error ? error.message : String(error)}`,
       });
       return;
@@ -230,7 +230,7 @@ export class VaultSeekView extends ItemView {
     this.statusEl.setText(`${results.length} result${results.length === 1 ? "" : "s"}`);
     this.searchBodyEl.empty();
     if (results.length === 0) {
-      this.searchBodyEl.createDiv({ cls: "vaultseek-empty", text: "No matches found." });
+      this.searchBodyEl.createDiv({ cls: "vaultsleuth-empty", text: "No matches found." });
       return;
     }
     for (const result of results) {
@@ -239,29 +239,29 @@ export class VaultSeekView extends ItemView {
   }
 
   private renderResult(result: SearchResult): void {
-    const card = this.searchBodyEl.createDiv({ cls: "vaultseek-result" });
-    const head = card.createDiv({ cls: "vaultseek-result-header" });
-    head.createDiv({ cls: "vaultseek-result-title", text: result.chunk.noteTitle });
-    head.createDiv({ cls: "vaultseek-result-score", text: result.score.toFixed(3) });
+    const card = this.searchBodyEl.createDiv({ cls: "vaultsleuth-result" });
+    const head = card.createDiv({ cls: "vaultsleuth-result-header" });
+    head.createDiv({ cls: "vaultsleuth-result-title", text: result.chunk.noteTitle });
+    head.createDiv({ cls: "vaultsleuth-result-score", text: result.score.toFixed(3) });
     if (result.chunk.heading.length > 0) {
-      card.createDiv({ cls: "vaultseek-result-snippet", text: `# ${result.chunk.heading}` });
+      card.createDiv({ cls: "vaultsleuth-result-snippet", text: `# ${result.chunk.heading}` });
     }
-    card.createDiv({ cls: "vaultseek-result-snippet", text: result.snippet });
+    card.createDiv({ cls: "vaultsleuth-result-snippet", text: result.snippet });
 
-    const actions = card.createDiv({ cls: "vaultseek-result-actions" });
+    const actions = card.createDiv({ cls: "vaultsleuth-result-actions" });
     this.addResultAction(actions, "Open in split", () => this.openInSplit(result.chunk.notePath));
     this.addResultAction(actions, "Insert link", () => this.insertLink(result.chunk.notePath));
     this.addResultAction(actions, "Copy citation", () => this.copyCitation(result.chunk.notePath));
 
     card.addEventListener("click", (event) => {
-      if (!(event.target as HTMLElement).hasClass("vaultseek-result-action")) {
+      if (!(event.target as HTMLElement).hasClass("vaultsleuth-result-action")) {
         void this.openInSplit(result.chunk.notePath);
       }
     });
   }
 
   private addResultAction(parent: HTMLElement, label: string, handler: () => void): void {
-    const el = parent.createSpan({ cls: "vaultseek-result-action", text: label });
+    const el = parent.createSpan({ cls: "vaultsleuth-result-action", text: label });
     el.addEventListener("click", (event) => {
       event.stopPropagation();
       handler();
@@ -291,12 +291,12 @@ export class VaultSeekView extends ItemView {
     }
     this.sending = true;
     this.inputEl.value = "";
-    if (this.chatBodyEl.querySelector(".vaultseek-empty") !== null) {
+    if (this.chatBodyEl.querySelector(".vaultsleuth-empty") !== null) {
       this.chatBodyEl.empty();
     }
     this.renderUserMessage(text);
-    const pending = this.chatBodyEl.createDiv({ cls: "vaultseek-chat-message is-assistant" });
-    pending.createDiv({ cls: "vaultseek-chat-bubble is-pending", text: "Thinking…" });
+    const pending = this.chatBodyEl.createDiv({ cls: "vaultsleuth-chat-message is-assistant" });
+    pending.createDiv({ cls: "vaultsleuth-chat-bubble is-pending", text: "Thinking…" });
     this.scrollToBottom();
 
     try {
@@ -322,30 +322,30 @@ export class VaultSeekView extends ItemView {
   }
 
   private renderUserMessage(text: string): void {
-    const el = this.chatBodyEl.createDiv({ cls: "vaultseek-chat-message is-user" });
-    el.createDiv({ cls: "vaultseek-chat-bubble", text });
+    const el = this.chatBodyEl.createDiv({ cls: "vaultsleuth-chat-message is-user" });
+    el.createDiv({ cls: "vaultsleuth-chat-bubble", text });
     this.addCopyAction(el, () => text);
   }
 
   /** Append a "Copy" control that writes the message text to the clipboard. */
   private addCopyAction(parent: HTMLElement, getText: () => string): void {
-    const actions = parent.createDiv({ cls: "vaultseek-msg-actions" });
-    const copy = actions.createSpan({ cls: "vaultseek-msg-action", text: "Copy" });
+    const actions = parent.createDiv({ cls: "vaultsleuth-msg-actions" });
+    const copy = actions.createSpan({ cls: "vaultsleuth-msg-action", text: "Copy" });
     copy.addEventListener("click", async () => {
       await navigator.clipboard.writeText(getText());
-      new Notice("VaultSeek: copied");
+      new Notice("VaultSleuth: copied");
     });
   }
 
   private async renderAssistant(message: ChatMessage, context: SearchResult[]): Promise<void> {
-    const el = this.chatBodyEl.createDiv({ cls: "vaultseek-chat-message is-assistant" });
-    const bubble = el.createDiv({ cls: "vaultseek-chat-bubble" });
+    const el = this.chatBodyEl.createDiv({ cls: "vaultsleuth-chat-message is-assistant" });
+    const bubble = el.createDiv({ cls: "vaultsleuth-chat-bubble" });
     bubble.toggleClass("is-refusal", message.refused);
     await MarkdownRenderer.render(this.app, message.content, bubble, "", this);
     this.renderContext(el, context);
     if (!message.refused && message.grounded === false) {
       el.createDiv({
-        cls: "vaultseek-chat-grounding",
+        cls: "vaultsleuth-chat-grounding",
         text: "⚠ Weak match in your notes — this answer may include the model's general knowledge.",
       });
     }
@@ -358,10 +358,10 @@ export class VaultSeekView extends ItemView {
     if (notes.length === 0) {
       return;
     }
-    const wrap = parent.createDiv({ cls: "vaultseek-context" });
-    wrap.createSpan({ cls: "vaultseek-context-label", text: "Context used:" });
+    const wrap = parent.createDiv({ cls: "vaultsleuth-context" });
+    wrap.createSpan({ cls: "vaultsleuth-context-label", text: "Context used:" });
     for (const path of notes) {
-      const chip = wrap.createSpan({ cls: "vaultseek-context-chip", text: noteBasename(path) });
+      const chip = wrap.createSpan({ cls: "vaultsleuth-context-chip", text: noteBasename(path) });
       chip.addEventListener("click", () => void this.openInSplit(path));
     }
   }
@@ -380,7 +380,7 @@ export class VaultSeekView extends ItemView {
   private async openInSplit(path: string): Promise<void> {
     const file = this.getFile(path);
     if (file === null) {
-      new Notice(`VaultSeek: note not found — ${path}`);
+      new Notice(`VaultSleuth: note not found — ${path}`);
       return;
     }
     await this.app.workspace.getLeaf("split").openFile(file);
@@ -391,14 +391,14 @@ export class VaultSeekView extends ItemView {
     const link = `[[${noteBasename(path)}]]`;
     if (markdownView?.editor) {
       markdownView.editor.replaceSelection(link);
-      new Notice("VaultSeek: link inserted");
+      new Notice("VaultSleuth: link inserted");
     } else {
-      new Notice("VaultSeek: open a note to insert a link");
+      new Notice("VaultSleuth: open a note to insert a link");
     }
   }
 
   private async copyCitation(path: string): Promise<void> {
     await navigator.clipboard.writeText(`[[${noteBasename(path)}]]`);
-    new Notice("VaultSeek: citation copied");
+    new Notice("VaultSleuth: citation copied");
   }
 }

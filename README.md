@@ -1,6 +1,6 @@
-# VaultSeek
+# VaultSleuth
 
-VaultSeek is a local-first Obsidian plugin that adds semantic search and a
+VaultSleuth is a local-first Obsidian plugin that adds semantic search and a
 vault-grounded chat panel across an entire vault. Indexing, search, and the
 embedding model all run fully on-device — after a one-time embedding-model
 download there are no network calls by default, and the plugin never writes to
@@ -12,7 +12,7 @@ example, a note titled "tapering off caffeine" becomes findable by searching
 
 ## How it works (in plain terms)
 
-Think of VaultSeek as a very patient **librarian** who has quietly read every note
+Think of VaultSleuth as a very patient **librarian** who has quietly read every note
 you've ever written. Instead of remembering exact words, the librarian remembers
 what each note _means_. So when you ask for "how to cut back on coffee," they walk
 straight to your note about "tapering off caffeine" — even though it doesn't use
@@ -38,7 +38,7 @@ flowchart TD
 
 **The pieces, in everyday words:**
 
-- **Your notes** — the Markdown files in your vault. VaultSeek only ever _reads_
+- **Your notes** — the Markdown files in your vault. VaultSleuth only ever _reads_
   them.
 - **Splitter** — long notes are cut into small passages so matches can be precise.
 - **Meaning-maker (the embedding model)** — a small AI that runs on your computer
@@ -46,7 +46,7 @@ flowchart TD
   similar numbers.
 - **The index** — a private filing cabinet of those numbers, stored in the
   plugin's own folder.
-- **Search** — your question gets the same number treatment, and VaultSeek finds
+- **Search** — your question gets the same number treatment, and VaultSleuth finds
   the passages whose numbers are closest.
 - **Chat (optional)** — if you connect a local AI (Ollama or LM Studio), it reads
   the matched passages and writes a short, cited answer. By default this step is
@@ -93,14 +93,14 @@ npm run build   # bundle src/main.ts → main.js
 ```
 
 To test it in a vault, copy `main.js`, `manifest.json`, and `styles.css` into
-`<your-vault>/.obsidian/plugins/vaultseek/`, then enable VaultSeek in
+`<your-vault>/.obsidian/plugins/vaultsleuth/`, then enable VaultSleuth in
 Obsidian's Community Plugins settings. On first index the embedding model
 (~33 MB) is downloaded once and cached on disk; everything after that is offline.
 
 ## Demo vault
 
 The repo ships a ready-made vault at [`demo-vault/`](demo-vault/) so you can try
-VaultSeek without using your own notes.
+VaultSleuth without using your own notes.
 
 **What it contains:** 1,000 Markdown notes, one per scientific abstract from the
 [BeIR/SciFact](https://github.com/allenai/scifact) corpus — peer-reviewed
@@ -122,7 +122,7 @@ source: "BeIR/SciFact"
 
 **To use it:** open `demo-vault/` as a vault in Obsidian (Open another vault →
 Open folder as vault) and install the plugin into
-`demo-vault/.obsidian/plugins/vaultseek/` as in Setup. Wait for the status bar to
+`demo-vault/.obsidian/plugins/vaultsleuth/` as in Setup. Wait for the status bar to
 reach `indexed (N chunks)`.
 
 **Sample searches** (Search tab — these have matching notes in the vault):
@@ -167,9 +167,9 @@ Every setting has a default, so a fresh install runs fully offline with no setup
 
 - **Index** — indexing starts automatically when the plugin loads. Progress is
   shown in the status bar; edits re-index incrementally (only changed chunks are
-  re-embedded). Use the command **VaultSeek: Re-index vault** to rebuild.
+  re-embedded). Use the command **VaultSleuth: Re-index vault** to rebuild.
 - **Search & Chat** — open the panel from the ribbon or the command palette
-  (**VaultSeek: Open semantic search** / **Open chat**). One view with a
+  (**VaultSleuth: Open semantic search** / **Open chat**). One view with a
   **Search ⇄ Chat** toggle sharing a single input box:
   - **Search** gives ranked results with a score, a snippet, and actions to open
     in a split, insert a link, or copy a citation. It works with any backend
@@ -231,7 +231,7 @@ than answered from thin context.
   and cached on disk. After that, indexing and search make **zero network
   calls** and run entirely on-device; chat is disabled until you choose a model.
 - **Read-only over your vault.** The plugin only ever writes to its own
-  `.obsidian/plugins/vaultseek/` data folder (the vector blob and its sidecar).
+  `.obsidian/plugins/vaultsleuth/` data folder (the vector blob and its sidecar).
   It never modifies your notes.
 - **Opt-in network paths.** `ollama` and `lmstudio` send retrieved chunks to a
   local server (localhost, on-device); `hosted` sends retrieved chunks to a

@@ -1,5 +1,5 @@
 /**
- * VaultSeek plugin entry point.
+ * VaultSleuth plugin entry point.
  *
  * Wires the Obsidian runtime to the indexing service and views: registers the
  * search view, a command-palette entry and ribbon icon, the settings tab, and
@@ -12,15 +12,15 @@
 import { Notice, Plugin, TFile, type WorkspaceLeaf } from "obsidian";
 import { INDEX_DEBOUNCE_MS } from "./core/config";
 import { defaultSettings } from "./core/config";
-import type { VaultSeekSettings } from "./core/types";
+import type { VaultSleuthSettings } from "./core/types";
 import { IndexService } from "./obsidian/indexService";
-import { VaultSeekView, VAULTSEEK_VIEW_TYPE, type ViewMode } from "./obsidian/VaultSeekView";
+import { VaultSleuthView, VAULTSLEUTH_VIEW_TYPE, type ViewMode } from "./obsidian/VaultSleuthView";
 import { SettingsTab, type SettingsHost } from "./obsidian/SettingsTab";
 
-const DEFAULT_PLUGIN_DIR = ".obsidian/plugins/vaultseek";
+const DEFAULT_PLUGIN_DIR = ".obsidian/plugins/vaultsleuth";
 
-export default class VaultSeekPlugin extends Plugin implements SettingsHost {
-  public settings: VaultSeekSettings = defaultSettings();
+export default class VaultSleuthPlugin extends Plugin implements SettingsHost {
+  public settings: VaultSleuthSettings = defaultSettings();
   private index!: IndexService;
   private statusBar!: HTMLElement;
   private readonly pendingPaths = new Set<string>();
@@ -32,11 +32,11 @@ export default class VaultSeekPlugin extends Plugin implements SettingsHost {
     const pluginDir = this.manifest.dir ?? DEFAULT_PLUGIN_DIR;
     this.index = new IndexService(this.app, this.settings, pluginDir);
 
-    this.registerView(VAULTSEEK_VIEW_TYPE, (leaf) => new VaultSeekView(leaf, this.index));
+    this.registerView(VAULTSLEUTH_VIEW_TYPE, (leaf) => new VaultSleuthView(leaf, this.index));
 
     this.addRibbonIcon(
       "brain-circuit",
-      "VaultSeek: search & chat",
+      "VaultSleuth: search & chat",
       () => void this.activateView("search"),
     );
 
@@ -80,14 +80,14 @@ export default class VaultSeekPlugin extends Plugin implements SettingsHost {
   /** Open (or reveal) the unified view in the right sidebar, set to `mode`. */
   private async activateView(mode: ViewMode): Promise<void> {
     const { workspace } = this.app;
-    let leaf: WorkspaceLeaf | null = workspace.getLeavesOfType(VAULTSEEK_VIEW_TYPE)[0] ?? null;
+    let leaf: WorkspaceLeaf | null = workspace.getLeavesOfType(VAULTSLEUTH_VIEW_TYPE)[0] ?? null;
     if (leaf === null) {
       leaf = workspace.getRightLeaf(false);
-      await leaf?.setViewState({ type: VAULTSEEK_VIEW_TYPE, active: true });
+      await leaf?.setViewState({ type: VAULTSLEUTH_VIEW_TYPE, active: true });
     }
     if (leaf !== null) {
       await workspace.revealLeaf(leaf);
-      if (leaf.view instanceof VaultSeekView) {
+      if (leaf.view instanceof VaultSleuthView) {
         leaf.view.setMode(mode);
       }
     }
@@ -148,17 +148,17 @@ export default class VaultSeekPlugin extends Plugin implements SettingsHost {
 
   /** Re-embed the entire vault, surfacing progress in the status bar. */
   public async requestReindex(): Promise<void> {
-    new Notice("VaultSeek: indexing vault…");
+    new Notice("VaultSleuth: indexing vault…");
     await this.index.reindexAll((done, total) => {
       this.setStatus(`indexing ${done}/${total}`);
     });
     const { chunks, notes } = this.index.stats();
     this.setStatus(`indexed (${chunks} chunks)`);
-    new Notice(`VaultSeek: indexed ${notes} notes (${chunks} chunks)`);
+    new Notice(`VaultSleuth: indexed ${notes} notes (${chunks} chunks)`);
   }
 
   private setStatus(text: string): void {
-    this.statusBar.setText(`VaultSeek: ${text}`);
+    this.statusBar.setText(`VaultSleuth: ${text}`);
   }
 
   public async loadSettings(): Promise<void> {
@@ -169,8 +169,8 @@ export default class VaultSeekPlugin extends Plugin implements SettingsHost {
     await this.saveData(this.settings);
     this.index?.updateSettings(this.settings);
     // Reflect backend changes (e.g. enabling/disabling chat) in any open view.
-    for (const leaf of this.app.workspace.getLeavesOfType(VAULTSEEK_VIEW_TYPE)) {
-      if (leaf.view instanceof VaultSeekView) {
+    for (const leaf of this.app.workspace.getLeavesOfType(VAULTSLEUTH_VIEW_TYPE)) {
+      if (leaf.view instanceof VaultSleuthView) {
         leaf.view.updateChatChrome();
       }
     }

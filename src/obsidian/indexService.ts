@@ -24,7 +24,13 @@ import { Bm25Index } from "../core/bm25";
 import { obsidianHttpClient } from "./obsidianHttp";
 import { VectorStore, type VectorSidecar } from "../core/vectorStore";
 import { EMBEDDING_MODELS, type EmbeddingModelInfo } from "../core/config";
-import type { Chunk, NoteInput, RankingMode, SearchResult, VaultSeekSettings } from "../core/types";
+import type {
+  Chunk,
+  NoteInput,
+  RankingMode,
+  SearchResult,
+  VaultSleuthSettings,
+} from "../core/types";
 
 const VECTOR_BLOB_FILE = "index.bin";
 const SIDECAR_FILE = "index.json";
@@ -52,14 +58,14 @@ function embedInput(chunk: Chunk): string {
 
 export class IndexService {
   private readonly app: App;
-  private settings: VaultSeekSettings;
+  private settings: VaultSleuthSettings;
   private readonly pluginDir: string;
   private embedder: TransformersEmbedder;
   private store: VectorStore;
   private readonly bm25 = new Bm25Index();
   private readonly indexedNotes = new Set<string>();
 
-  constructor(app: App, settings: VaultSeekSettings, pluginDir: string) {
+  constructor(app: App, settings: VaultSleuthSettings, pluginDir: string) {
     this.app = app;
     this.settings = settings;
     this.pluginDir = pluginDir;
@@ -88,7 +94,7 @@ export class IndexService {
   }
 
   /** Apply updated settings; a model change requires a full re-index by the caller. */
-  public updateSettings(settings: VaultSeekSettings): void {
+  public updateSettings(settings: VaultSleuthSettings): void {
     const modelChanged = settings.embeddingModel !== this.settings.embeddingModel;
     this.settings = settings;
     if (modelChanged) {

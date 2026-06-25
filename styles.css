@@ -1,9 +1,9 @@
 /*
- * VaultSeek styles. All colors derive from Obsidian theme variables so the view
+ * VaultSleuth styles. All colors derive from Obsidian theme variables so the view
  * adapts to light/dark and custom themes without hard-coded values.
  */
 
-.vaultseek-view {
+.vaultsleuth-view {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -11,14 +11,14 @@
   padding: var(--size-4-2);
 }
 
-.vaultseek-header {
+.vaultsleuth-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: var(--size-4-2);
 }
 
-.vaultseek-tabs {
+.vaultsleuth-tabs {
   display: flex;
   gap: var(--size-2-1);
   background: var(--background-modifier-border);
@@ -26,7 +26,7 @@
   padding: 2px;
 }
 
-.vaultseek-tab {
+.vaultsleuth-tab {
   box-shadow: none;
   background: transparent;
   color: var(--text-muted);
@@ -35,22 +35,22 @@
   cursor: pointer;
 }
 
-.vaultseek-tab.is-active {
+.vaultsleuth-tab.is-active {
   background: var(--background-primary);
   color: var(--text-normal);
   font-weight: var(--font-semibold);
 }
 
-.vaultseek-tab.is-disabled {
+.vaultsleuth-tab.is-disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
 
-.vaultseek-reset {
+.vaultsleuth-reset {
   font-size: var(--font-ui-smaller);
 }
 
-.vaultseek-body {
+.vaultsleuth-body {
   flex: 1;
   overflow-y: auto;
   display: flex;
@@ -58,25 +58,25 @@
   gap: var(--size-4-2);
 }
 
-.vaultseek-search-row {
+.vaultsleuth-search-row {
   display: flex;
   gap: var(--size-4-1);
   align-items: flex-end;
 }
 
-.vaultseek-input {
+.vaultsleuth-input {
   flex: 1;
   resize: vertical;
   min-height: 2.2em;
 }
 
-.vaultseek-status {
+.vaultsleuth-status {
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
   min-height: 1.2em;
 }
 
-.vaultseek-result {
+.vaultsleuth-result {
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-m);
   padding: var(--size-4-2);
@@ -84,52 +84,52 @@
   background: var(--background-secondary);
 }
 
-.vaultseek-result:hover {
+.vaultsleuth-result:hover {
   border-color: var(--interactive-accent);
 }
 
-.vaultseek-result-header {
+.vaultsleuth-result-header {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   gap: var(--size-4-2);
 }
 
-.vaultseek-result-title {
+.vaultsleuth-result-title {
   font-weight: var(--font-semibold);
   color: var(--text-normal);
 }
 
-.vaultseek-result-score {
+.vaultsleuth-result-score {
   font-size: var(--font-ui-smaller);
   color: var(--text-accent);
   font-variant-numeric: tabular-nums;
 }
 
-.vaultseek-result-snippet {
+.vaultsleuth-result-snippet {
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
   margin-top: var(--size-4-1);
   line-height: 1.4;
 }
 
-.vaultseek-result-actions {
+.vaultsleuth-result-actions {
   display: flex;
   gap: var(--size-4-2);
   margin-top: var(--size-4-1);
 }
 
-.vaultseek-result-action {
+.vaultsleuth-result-action {
   font-size: var(--font-ui-smaller);
   color: var(--text-accent);
   cursor: pointer;
 }
 
-.vaultseek-result-action:hover {
+.vaultsleuth-result-action:hover {
   text-decoration: underline;
 }
 
-.vaultseek-empty {
+.vaultsleuth-empty {
   color: var(--text-faint);
   text-align: center;
   margin-top: var(--size-4-8);
@@ -137,30 +137,30 @@
 
 /* Chat thread */
 
-.vaultseek-chat-model {
+.vaultsleuth-chat-model {
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
   padding: var(--size-2-1) 0;
 }
 
-.vaultseek-chat-message {
+.vaultsleuth-chat-message {
   display: flex;
   flex-direction: column;
   gap: var(--size-2-1);
   max-width: 92%;
 }
 
-.vaultseek-chat-message.is-user {
+.vaultsleuth-chat-message.is-user {
   align-self: flex-end;
   align-items: flex-end;
 }
 
-.vaultseek-chat-message.is-assistant {
+.vaultsleuth-chat-message.is-assistant {
   align-self: flex-start;
   align-items: flex-start;
 }
 
-.vaultseek-chat-bubble {
+.vaultsleuth-chat-bubble {
   border-radius: var(--radius-m);
   padding: var(--size-4-2);
   line-height: 1.5;
@@ -168,62 +168,62 @@
   -webkit-user-select: text;
 }
 
-.vaultseek-msg-actions {
+.vaultsleuth-msg-actions {
   display: flex;
   gap: var(--size-2-2);
 }
 
-.vaultseek-msg-action {
+.vaultsleuth-msg-action {
   font-size: var(--font-ui-smaller);
   color: var(--text-faint);
   cursor: pointer;
 }
 
-.vaultseek-msg-action:hover {
+.vaultsleuth-msg-action:hover {
   color: var(--text-accent);
   text-decoration: underline;
 }
 
-.is-user .vaultseek-chat-bubble {
+.is-user .vaultsleuth-chat-bubble {
   background: var(--interactive-accent);
   color: var(--text-on-accent);
 }
 
-.is-assistant .vaultseek-chat-bubble {
+.is-assistant .vaultsleuth-chat-bubble {
   background: var(--background-secondary);
   color: var(--text-normal);
 }
 
-.vaultseek-chat-bubble.is-pending {
+.vaultsleuth-chat-bubble.is-pending {
   color: var(--text-muted);
   font-style: italic;
 }
 
-.vaultseek-chat-bubble.is-refusal {
+.vaultsleuth-chat-bubble.is-refusal {
   color: var(--text-muted);
   font-style: italic;
 }
 
-.vaultseek-chat-bubble > :first-child {
+.vaultsleuth-chat-bubble > :first-child {
   margin-top: 0;
 }
 
-.vaultseek-chat-bubble > :last-child {
+.vaultsleuth-chat-bubble > :last-child {
   margin-bottom: 0;
 }
 
-.vaultseek-chat-citations {
+.vaultsleuth-chat-citations {
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
 }
 
-.vaultseek-chat-grounding {
+.vaultsleuth-chat-grounding {
   font-size: var(--font-ui-smaller);
   color: var(--text-warning);
   font-style: italic;
 }
 
-.vaultseek-context {
+.vaultsleuth-context {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -231,11 +231,11 @@
   font-size: var(--font-ui-smaller);
 }
 
-.vaultseek-context-label {
+.vaultsleuth-context-label {
   color: var(--text-faint);
 }
 
-.vaultseek-context-chip {
+.vaultsleuth-context-chip {
   color: var(--text-accent);
   background: var(--background-modifier-hover);
   border-radius: var(--radius-s);
@@ -247,6 +247,6 @@
   white-space: nowrap;
 }
 
-.vaultseek-context-chip:hover {
+.vaultsleuth-context-chip:hover {
   text-decoration: underline;
 }

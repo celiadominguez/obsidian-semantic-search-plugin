@@ -1,5 +1,5 @@
 /**
- * esbuild bundler for the VaultSeek Obsidian plugin.
+ * esbuild bundler for the VaultSleuth Obsidian plugin.
  *
  * Obsidian loads a single CommonJS `main.js` from the plugin folder, so the whole
  * plugin — including the bundled transformers.js embedding model runtime — is
@@ -12,7 +12,7 @@ import process from "node:process";
 const PRODUCTION = process.argv.includes("production");
 
 const BANNER =
-  "/* VaultSeek — local-first semantic search for Obsidian. Bundled artifact; edit sources under src/. */";
+  "/* VaultSleuth — local-first semantic search for Obsidian. Bundled artifact; edit sources under src/. */";
 
 // Modules provided by the Obsidian runtime or Node — never bundle these.
 const EXTERNALS = [
@@ -55,5 +55,5 @@ if (PRODUCTION) {
 } else {
   const ctx = await esbuild.context(buildOptions);
   await ctx.watch();
-  console.log("VaultSeek: esbuild watching for changes…");
+  console.log("VaultSleuth: esbuild watching for changes…");
 }

@@ -22,7 +22,7 @@ import { ChatEngine } from "../src/core/chat";
 import { VectorStore } from "../src/core/vectorStore";
 import { rank } from "../src/core/hybridRanker";
 import { buildIndex, evaluateAllModes, type Qrel } from "../eval/evaluate";
-import type { NoteInput, VaultSeekSettings } from "../src/core/types";
+import type { NoteInput, VaultSleuthSettings } from "../src/core/types";
 
 const DEMO_VAULT_DIR = "demo-vault";
 const SUBSET_SIZE = 60;
@@ -51,7 +51,7 @@ describe("MVP acceptance", () => {
   it("manifest.json is valid (id, semver, desktop-only, no numbering)", () => {
     const raw = readFileSync("manifest.json", "utf8");
     const manifest = JSON.parse(raw) as Record<string, unknown>;
-    expect(manifest.id).toBe("vaultseek");
+    expect(manifest.id).toBe("vaultsleuth");
     expect(manifest.isDesktopOnly).toBe(true);
     expect(typeof manifest.version).toBe("string");
     expect(manifest.version as string).toMatch(/^\d+\.\d+\.\d+$/);
@@ -182,7 +182,7 @@ describe("Hardening acceptance", () => {
 
   it("settings tab covers every configuration key", () => {
     const source = readFileSync(join("src", "obsidian", "SettingsTab.ts"), "utf8");
-    const settings: VaultSeekSettings = defaultSettings();
+    const settings: VaultSleuthSettings = defaultSettings();
     for (const key of Object.keys(settings)) {
       expect(source, `SettingsTab is missing settings.${key}`).toContain(`settings.${key}`);
     }

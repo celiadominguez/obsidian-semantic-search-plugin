@@ -1,11 +1,11 @@
 /**
- * Central configuration for VaultSeek: the default user-facing settings plus
+ * Central configuration for VaultSleuth: the default user-facing settings plus
  * every internal tuning constant. Keeping magic numbers here (rather than inline)
  * means the retrieval behaviour is auditable in one place and the layering rule
  * (`core` never imports `obsidian`) is trivially satisfied for settings access.
  */
 
-import type { EmbeddingModelId, GenerationBackend, VaultSeekSettings } from "./types";
+import type { EmbeddingModelId, GenerationBackend, VaultSleuthSettings } from "./types";
 
 /** Per-model retrieval configuration. */
 export interface EmbeddingModelInfo {
@@ -102,7 +102,7 @@ export const EMBED_BATCH_SIZE = 32;
 export const GENERATION_BACKENDS: GenerationBackend[] = ["none", "ollama", "lmstudio", "hosted"];
 
 /** Factory for the default settings of a fresh, fully-offline install. */
-export function defaultSettings(): VaultSeekSettings {
+export function defaultSettings(): VaultSleuthSettings {
   return {
     embeddingModel: DEFAULT_EMBEDDING_MODEL,
     useWebGPU: true,

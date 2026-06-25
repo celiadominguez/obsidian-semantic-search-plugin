@@ -10,11 +10,11 @@ import { type Plugin, PluginSettingTab, Setting } from "obsidian";
 import { EMBEDDING_MODELS, GENERATION_BACKENDS } from "../core/config";
 import { listOllamaModels, listOpenAiModels } from "../core/qa";
 import { obsidianHttpClient } from "./obsidianHttp";
-import type { EmbeddingModelId, GenerationBackend, VaultSeekSettings } from "../core/types";
+import type { EmbeddingModelId, GenerationBackend, VaultSleuthSettings } from "../core/types";
 
 /** What the settings tab needs from the plugin, decoupled from the class. */
 export interface SettingsHost extends Plugin {
-  settings: VaultSeekSettings;
+  settings: VaultSleuthSettings;
   saveSettings(): Promise<void>;
   /** Re-embed the whole vault (after a model or chunking change). */
   requestReindex(): Promise<void>;

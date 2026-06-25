@@ -17,7 +17,7 @@
 
 import { defaultHttpClient, type HttpClient } from "./http";
 import { noteBasename } from "./notePath";
-import type { GenerationRequest, Generator, SearchResult, VaultSeekSettings } from "./types";
+import type { GenerationRequest, Generator, SearchResult, VaultSleuthSettings } from "./types";
 
 /** Returned verbatim when retrieval is too weak to answer confidently. */
 export const REFUSAL_MESSAGE =
@@ -217,7 +217,7 @@ export class HostedGenerator implements Generator {
 
 /** Build the generator selected by the user's settings, using the given HTTP client. */
 export function createGenerator(
-  settings: VaultSeekSettings,
+  settings: VaultSleuthSettings,
   http: HttpClient = defaultHttpClient,
 ): Generator {
   switch (settings.generationBackend) {

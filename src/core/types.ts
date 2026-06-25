@@ -1,5 +1,5 @@
 /**
- * Shared type definitions for the VaultSeek core. These types are deliberately
+ * Shared type definitions for the VaultSleuth core. These types are deliberately
  * free of any Obsidian dependency so the whole `core` layer compiles and unit-tests
  * in plain Node.
  */
@@ -11,7 +11,7 @@ export type EmbeddingModelId = "Xenova/bge-small-en-v1.5" | "Xenova/all-MiniLM-L
 export type GenerationBackend = "none" | "ollama" | "lmstudio" | "hosted";
 
 /** Persisted, user-facing configuration. Every key has a default (see config.ts). */
-export interface VaultSeekSettings {
+export interface VaultSleuthSettings {
   embeddingModel: EmbeddingModelId;
   useWebGPU: boolean;
   chunkTokens: number;

@@ -1,6 +1,6 @@
 {
-  "id": "vaultseek",
-  "name": "VaultSeek",
+  "id": "vaultsleuth",
+  "name": "VaultSleuth",
   "version": "1.1.0",
   "minAppVersion": "1.9.0",
   "description": "Local-first semantic search and cited chat across your vault. Embedding and retrieval run fully on-device — no server, no data leaves your machine by default.",
