@@ -1,12 +1,9 @@
 /**
  * esbuild bundler for the VaultSeek Obsidian plugin.
  *
- * Why this shape: Obsidian loads a single CommonJS `main.js` from the plugin
- * folder, so the entire plugin (including the embedding Web Worker) must be
- * bundled into that one artifact. The worker is bundled separately into an
- * in-memory string and exposed through the virtual module `inline:embed-worker`;
- * at runtime the main thread instantiates it from a Blob URL, which keeps the
- * plugin a single shippable file with no sidecar scripts to resolve on disk.
+ * Obsidian loads a single CommonJS `main.js` from the plugin folder, so the whole
+ * plugin — including the bundled transformers.js embedding model runtime — is
+ * emitted into that one artifact alongside `manifest.json` and `styles.css`.
  */
 
 import esbuild from "esbuild";
@@ -38,39 +35,6 @@ const EXTERNALS = [
   "node:crypto",
 ];
 
-/**
- * esbuild plugin that bundles the embedding worker into a string and serves it
- * through the `inline:embed-worker` import specifier.
- */
-const inlineWorkerPlugin = {
-  name: "inline-embed-worker",
-  setup(build) {
-    build.onResolve({ filter: /^inline:embed-worker$/ }, () => ({
-      path: "embed-worker",
-      namespace: "inline-worker",
-    }));
-
-    build.onLoad({ filter: /.*/, namespace: "inline-worker" }, async () => {
-      const result = await esbuild.build({
-        entryPoints: ["src/worker/embedWorker.ts"],
-        bundle: true,
-        format: "iife",
-        platform: "browser",
-        target: "es2022",
-        minify: PRODUCTION,
-        write: false,
-        sourcemap: false,
-        external: ["onnxruntime-node"],
-      });
-      const code = result.outputFiles[0].text;
-      return {
-        contents: `export default ${JSON.stringify(code)};`,
-        loader: "js",
-      };
-    });
-  },
-};
-
 const buildOptions = {
   entryPoints: ["src/main.ts"],
   bundle: true,
@@ -84,7 +48,6 @@ const buildOptions = {
   minify: PRODUCTION,
   outfile: "main.js",
   logLevel: "info",
-  plugins: [inlineWorkerPlugin],
 };
 
 if (PRODUCTION) {

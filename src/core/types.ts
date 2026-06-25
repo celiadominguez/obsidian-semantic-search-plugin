@@ -78,8 +78,8 @@ export interface SearchResult {
 export type RankingMode = "semantic" | "lexical" | "hybrid";
 
 /**
- * Minimal embedder contract. Implementations: a transformers.js model (in a
- * worker or in Node), and a deterministic stub for offline tests.
+ * Minimal embedder contract. Implementations: a transformers.js model (in the
+ * renderer or in Node), and a deterministic stub for offline tests.
  */
 export interface Embedder {
   /** Output dimensionality of the produced vectors. */

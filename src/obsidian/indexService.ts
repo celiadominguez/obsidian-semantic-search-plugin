@@ -4,8 +4,9 @@
  * It is the only place that touches `obsidian` for indexing. It reads notes
  * (never writes to them), chunks and embeds changed content incrementally using
  * content hashes, maintains the vector store and BM25 index, and persists the
- * index to the plugin's own data folder. Embedding runs in the Web Worker via
- * `WorkerEmbedder`, so the UI thread stays responsive.
+ * index to the plugin's own data folder. Embedding runs on-device via
+ * transformers.js, in batches; indexing is deferred to after layout-ready and
+ * debounced on edits so it stays off the interactive path.
  *
  * Read-only guarantee: the only writes this service makes are to
  * `<pluginDir>/index.bin` and `<pluginDir>/index.json`.
@@ -16,12 +17,12 @@ import { EMBED_BATCH_SIZE } from "../core/config";
 import { chunkNote } from "../core/chunker";
 import { hashText } from "../core/hash";
 import { rank } from "../core/hybridRanker";
+import { TransformersEmbedder } from "../core/embedder";
 import { createGenerator } from "../core/qa";
 import { ChatEngine } from "../core/chat";
 import { Bm25Index } from "../core/bm25";
 import { obsidianHttpClient } from "./obsidianHttp";
 import { VectorStore, type VectorSidecar } from "../core/vectorStore";
-import { WorkerEmbedder } from "../worker/workerEmbedder";
 import { EMBEDDING_MODELS, type EmbeddingModelInfo } from "../core/config";
 import type { Chunk, NoteInput, RankingMode, SearchResult, VaultSeekSettings } from "../core/types";
 
@@ -53,7 +54,7 @@ export class IndexService {
   private readonly app: App;
   private settings: VaultSeekSettings;
   private readonly pluginDir: string;
-  private embedder: WorkerEmbedder;
+  private embedder: TransformersEmbedder;
   private store: VectorStore;
   private readonly bm25 = new Bm25Index();
   private readonly indexedNotes = new Set<string>();
@@ -70,8 +71,8 @@ export class IndexService {
     return EMBEDDING_MODELS[this.settings.embeddingModel].dim;
   }
 
-  private createEmbedder(): WorkerEmbedder {
-    return new WorkerEmbedder({
+  private createEmbedder(): TransformersEmbedder {
+    return new TransformersEmbedder({
       modelId: this.settings.embeddingModel,
       dim: this.modelDim(),
       useWebGPU: this.settings.useWebGPU,
@@ -91,7 +92,6 @@ export class IndexService {
     const modelChanged = settings.embeddingModel !== this.settings.embeddingModel;
     this.settings = settings;
     if (modelChanged) {
-      this.embedder.terminate();
       this.embedder = this.createEmbedder();
       this.store = this.createStore();
       this.bm25.clear();
@@ -297,10 +297,5 @@ export class IndexService {
       modelId: this.settings.embeddingModel,
       usesHnsw: this.store.usesHnsw,
     };
-  }
-
-  /** Release the worker on plugin unload. */
-  public dispose(): void {
-    this.embedder.terminate();
   }
 }

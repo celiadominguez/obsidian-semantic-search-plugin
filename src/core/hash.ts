@@ -2,8 +2,8 @@
  * Tiny, dependency-free string hashing used for content-based chunk diffing.
  *
  * FNV-1a is chosen over a crypto hash because the goal is change detection, not
- * security: it is fast, deterministic, and identical across Node, the browser,
- * and the Web Worker (no `node:crypto` dependency), which keeps `core` portable.
+ * security: it is fast, deterministic, and identical across Node and the browser
+ * (no `node:crypto` dependency), which keeps `core` portable.
  */
 
 const FNV_OFFSET_BASIS = 0x811c9dc5;

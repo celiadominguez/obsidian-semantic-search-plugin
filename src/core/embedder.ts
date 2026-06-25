@@ -5,7 +5,7 @@
  * every code path, and two `Embedder` implementations:
  *
  *  - `TransformersEmbedder` — the real on-device model via transformers.js. It
- *    runs unchanged in Node (for the offline eval) and in the browser/Web Worker
+ *    runs unchanged in Node (for the offline eval) and in Obsidian's renderer
  *    (for the plugin), selecting WebGPU when available and falling back to WASM.
  *  - `HashingEmbedder` — a deterministic, network-free feature-hashing embedder
  *    used by unit/acceptance tests so the suite never downloads a model. Its
@@ -61,16 +61,14 @@ type Dtype = "q8" | "int8" | "uint8" | "fp32" | "fp16" | "q4" | "auto";
 type Device = "webgpu" | "wasm" | "cpu" | "coreml" | "auto";
 
 /**
- * True only under a *real* Node process (the eval), not a browser or an Electron
- * renderer. Checking `process.versions.node` is not enough: Electron's renderer
- * exposes Node's `process` too, which is exactly what misleads transformers.js.
- * A real Node process has neither a `window` nor a Web Worker `self`, whereas the
- * Obsidian renderer has `window` and the embedding worker has `self`.
+ * True only under a *real* Node process (the eval), not Obsidian's Electron
+ * renderer. Checking `process.versions.node` is not enough: the renderer exposes
+ * Node's `process` too, which is exactly what misleads transformers.js. The
+ * renderer additionally has a DOM `window`; a real Node process does not.
  */
 function isRealNode(): boolean {
   return (
     typeof window === "undefined" &&
-    typeof self === "undefined" &&
     typeof process !== "undefined" &&
     typeof process.versions?.node === "string"
   );
@@ -78,8 +76,8 @@ function isRealNode(): boolean {
 
 /**
  * Non-GPU device for the current runtime: transformers.js exposes "wasm" in the
- * browser/Web Worker but "cpu" under Node, so the fallback device differs by
- * environment. This keeps the same model working in the plugin and in the eval.
+ * browser but "cpu" under Node, so the fallback device differs by environment.
+ * This keeps the same model working in the plugin and in the eval.
  */
 function nonGpuDevice(): Device {
   return isRealNode() ? "cpu" : "wasm";

@@ -61,25 +61,27 @@ vault events (create/modify/delete/rename)
    chunk (heading-aware, ~512 tokens, 64 overlap)
         │
         ▼
-   embed  ──►  Web Worker (transformers.js, WebGPU → WASM fallback)
+   embed  ──►  transformers.js on-device (WebGPU → WASM), in batches
         │
         ▼
    store  ──►  Float32 vectors (exact cosine; HNSW above a threshold)
         │      + BM25 lexical index
         ▼
-   search / Q&A  ──►  hybrid rank (α·cosine + (1−α)·bm25)  ──►  cited answer
+   search / chat  ──►  hybrid rank (α·cosine + (1−α)·bm25)  ──►  cited answer
 ```
 
 The codebase is split into two layers with a strict rule:
 
 - **`src/core/`** — pure retrieval logic (chunker, embedder, vector store, BM25,
-  hybrid ranker, Q&A engine). It imports **nothing from `obsidian`**, so it
-  compiles and unit-tests in plain Node. This is what makes the retrieval
+  hybrid ranker, chat/citation engine). It imports **nothing from `obsidian`**,
+  so it compiles and unit-tests in plain Node. This is what makes the retrieval
   behaviour testable and the eval reproducible.
 - **`src/obsidian/`** — thin glue to the Obsidian API (the sidebar view, the
-  settings tab, and the vault-event wiring). It is excluded from unit tests.
-- **`src/worker/`** — the embedding Web Worker and its main-thread bridge, so the
-  UI thread never blocks during indexing.
+  settings tab, the vault-event wiring, and a `requestUrl`-based HTTP client for
+  local LLM backends). It is excluded from unit tests.
+
+Embedding runs on-device via transformers.js, batched and deferred to after the
+workspace is ready (and debounced on edits) so it stays off the interactive path.
 
 ## Setup
 

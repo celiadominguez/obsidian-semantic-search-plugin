@@ -5,7 +5,8 @@
  * search view, a command-palette entry and ribbon icon, the settings tab, and
  * debounced vault change handlers that keep the index incrementally up to date.
  * It also owns settings persistence and the index lifecycle (load on start,
- * re-index on demand, dispose on unload).
+ * re-index on demand). Views, commands, and vault events are registered via the
+ * plugin's `register*` helpers, so Obsidian tears them down automatically.
  */
 
 import { Notice, Plugin, TFile, type WorkspaceLeaf } from "obsidian";
@@ -65,10 +66,6 @@ export default class VaultSeekPlugin extends Plugin implements SettingsHost {
 
     // Defer initial indexing until the workspace is ready so startup is snappy.
     this.app.workspace.onLayoutReady(() => void this.bootstrapIndex());
-  }
-
-  public onunload(): void {
-    this.index?.dispose();
   }
 
   private async bootstrapIndex(): Promise<void> {
