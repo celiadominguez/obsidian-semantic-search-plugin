@@ -30,9 +30,9 @@ export default tseslint.config(
     },
   },
   {
-    // Eval, scripts and the worker run outside the plugin sandbox; console output
-    // is their intended interface, so logging there is expected, not a smell.
-    files: ["eval/**/*.ts", "scripts/**/*.ts", "src/worker/**/*.ts"],
+    // Eval and scripts run outside the plugin sandbox; console output is their
+    // intended interface, so logging there is expected, not a smell.
+    files: ["eval/**/*.ts", "scripts/**/*.ts"],
     rules: {
       "no-console": "off",
     },

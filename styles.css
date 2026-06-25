@@ -223,6 +223,16 @@
   font-style: italic;
 }
 
+.vaultsleuth-chat-error {
+  align-self: flex-start;
+  max-width: 92%;
+  border: 1px solid var(--background-modifier-error);
+  border-radius: var(--radius-m);
+  padding: var(--size-4-2);
+  color: var(--text-error);
+  font-size: var(--font-ui-smaller);
+}
+
 .vaultsleuth-context {
   display: flex;
   flex-wrap: wrap;

@@ -42,6 +42,8 @@ export class VaultSleuthView extends ItemView {
   private chatBodyEl!: HTMLElement;
 
   private debounceTimer: number | null = null;
+  /** Monotonic id so a slow search can't overwrite the results of a newer one. */
+  private searchSeq = 0;
   private sending = false;
 
   constructor(leaf: WorkspaceLeaf, index: IndexService) {
@@ -126,6 +128,11 @@ export class VaultSleuthView extends ItemView {
     if (mode === "chat" && !this.chatAvailable()) {
       mode = "search";
     }
+    // Cancel any pending search so it can't fire against the other mode's input.
+    if (this.debounceTimer !== null) {
+      window.clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
     // Stash the outgoing mode's draft and restore the incoming mode's.
     this.drafts[this.mode] = this.inputEl.value;
     this.mode = mode;
@@ -153,13 +160,24 @@ export class VaultSleuthView extends ItemView {
   }
 
   /**
+   * Settings changed: drop the cached chat engine so the next turn is rebuilt
+   * against the current model/backend/index, then refresh the chrome. Separate
+   * from {@link updateChatChrome} (which runs on every mode switch) so toggling
+   * Search/Chat never discards an in-progress conversation.
+   */
+  public onSettingsChanged(): void {
+    this.chatEngine = null;
+    this.updateChatChrome();
+  }
+
+  /**
    * Reflect the configured backend: enable/disable the Chat tab and show the
-   * active model. Called by the plugin when settings change so the tab updates
-   * live, and on every mode switch.
+   * active model. Called on every mode switch and whenever settings change.
    */
   public updateChatChrome(): void {
     const canChat = this.chatAvailable();
     this.chatTab.toggleClass("is-disabled", !canChat);
+    this.chatTab.toggleAttribute("disabled", !canChat);
     this.chatTab.setAttribute(
       "title",
       canChat ? "" : "Set a local (Ollama / LM Studio) or hosted model in settings to chat",
@@ -212,11 +230,15 @@ export class VaultSleuthView extends ItemView {
       this.statusEl.setText("");
       return;
     }
+    const seq = ++this.searchSeq;
     this.statusEl.setText("Searching…");
     let results;
     try {
       results = await this.index.search(query, "hybrid", DEFAULT_TOP_K);
     } catch (error) {
+      if (seq !== this.searchSeq) {
+        return;
+      }
       // Most likely the embedding model failed to load (e.g. offline before the
       // one-time download). Surface it instead of leaving "Searching…" forever.
       this.statusEl.setText("");
@@ -225,6 +247,10 @@ export class VaultSleuthView extends ItemView {
         cls: "vaultsleuth-empty",
         text: `Search failed: ${error instanceof Error ? error.message : String(error)}`,
       });
+      return;
+    }
+    // A newer search started while this one was awaiting — discard stale results.
+    if (seq !== this.searchSeq) {
       return;
     }
     this.statusEl.setText(`${results.length} result${results.length === 1 ? "" : "s"}`);
@@ -304,17 +330,15 @@ export class VaultSleuthView extends ItemView {
       pending.remove();
       await this.renderAssistant(reply.message, reply.context);
     } catch (error) {
+      // A thrown error is a backend/transport failure (server down, bad config) —
+      // not a content refusal. Show it as a distinct error, not an answer bubble.
       pending.remove();
-      await this.renderAssistant(
-        {
-          role: "assistant",
-          content: error instanceof Error ? error.message : String(error),
-          citations: [],
-          refused: true,
-          grounded: false,
-        },
-        [],
-      );
+      const detail = error instanceof Error ? error.message : String(error);
+      const el = this.chatBodyEl.createDiv({ cls: "vaultsleuth-chat-message is-assistant" });
+      el.createDiv({
+        cls: "vaultsleuth-chat-error",
+        text: `Couldn't reach the model (${detail}). Check that your ${this.index.generationSummary} backend is running and configured in settings.`,
+      });
     } finally {
       this.sending = false;
       this.scrollToBottom();
@@ -333,7 +357,7 @@ export class VaultSleuthView extends ItemView {
     const copy = actions.createSpan({ cls: "vaultsleuth-msg-action", text: "Copy" });
     copy.addEventListener("click", async () => {
       await navigator.clipboard.writeText(getText());
-      new Notice("VaultSleuth: copied");
+      new Notice("Copied");
     });
   }
 
@@ -380,7 +404,7 @@ export class VaultSleuthView extends ItemView {
   private async openInSplit(path: string): Promise<void> {
     const file = this.getFile(path);
     if (file === null) {
-      new Notice(`VaultSleuth: note not found — ${path}`);
+      new Notice(`Note not found — ${path}`);
       return;
     }
     await this.app.workspace.getLeaf("split").openFile(file);
@@ -391,14 +415,14 @@ export class VaultSleuthView extends ItemView {
     const link = `[[${noteBasename(path)}]]`;
     if (markdownView?.editor) {
       markdownView.editor.replaceSelection(link);
-      new Notice("VaultSleuth: link inserted");
+      new Notice("Link inserted");
     } else {
-      new Notice("VaultSleuth: open a note to insert a link");
+      new Notice("Open a note to insert a link");
     }
   }
 
   private async copyCitation(path: string): Promise<void> {
     await navigator.clipboard.writeText(`[[${noteBasename(path)}]]`);
-    new Notice("VaultSleuth: citation copied");
+    new Notice("Citation copied");
   }
 }

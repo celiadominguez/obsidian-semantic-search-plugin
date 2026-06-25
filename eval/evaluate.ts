@@ -8,11 +8,12 @@
 import { chunkNote } from "../src/core/chunker";
 import { hashText } from "../src/core/hash";
 import { cosineSimilarity } from "../src/core/embedder";
+import { embedInput, lexicalInput } from "../src/core/indexSurface";
 import { Bm25Index } from "../src/core/bm25";
 import { VectorStore } from "../src/core/vectorStore";
 import { rank } from "../src/core/hybridRanker";
 import { DEFAULT_HNSW_THRESHOLD } from "../src/core/config";
-import type { Chunk, Embedder, NoteInput, RankingMode } from "../src/core/types";
+import type { Embedder, NoteInput, RankingMode } from "../src/core/types";
 
 /** Rank cutoff used for all reported metrics. */
 export const CUTOFF = 10;
@@ -48,16 +49,6 @@ export interface IndexBuildOptions {
   chunkTokens: number;
   chunkOverlap: number;
   hnswThreshold?: number;
-}
-
-/** Title + heading + text, the lexical surface for BM25. */
-function lexicalInput(chunk: Chunk): string {
-  return `${chunk.noteTitle} ${chunk.heading} ${chunk.text}`.trim();
-}
-
-/** Heading-prefixed text, the surface actually embedded. */
-function embedInput(chunk: Chunk): string {
-  return chunk.heading.length > 0 ? `${chunk.heading}\n${chunk.text}` : chunk.text;
 }
 
 /** Build a vector store and BM25 index over the given notes. */

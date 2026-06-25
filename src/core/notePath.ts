@@ -1,6 +1,6 @@
 /**
  * Small helpers for turning vault note paths into display/wikilink names.
- * Lives in its own module so both the search view and the Q&A engine can share
+ * Lives in its own module so both the search view and the chat engine can share
  * it without depending on each other.
  */
 

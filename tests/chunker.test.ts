@@ -15,6 +15,10 @@ describe("stripFrontmatter", () => {
   it("leaves content without frontmatter untouched", () => {
     expect(stripFrontmatter("No frontmatter here")).toBe("No frontmatter here");
   });
+
+  it("strips an empty frontmatter block", () => {
+    expect(stripFrontmatter("---\n---\nBody")).toBe("Body");
+  });
 });
 
 describe("chunkNote", () => {
@@ -26,6 +30,12 @@ describe("chunkNote", () => {
     expect(chunks[1].heading).toBe("Beta");
     expect(chunks.map((c) => c.ordinal)).toEqual([0, 1]);
     expect(chunks.map((c) => c.id)).toEqual(["note.md#0", "note.md#1"]);
+  });
+
+  it("indexes a heading-only note (e.g. a Map-of-Content) by its headings", () => {
+    const content = "# Index\n## Projects\n## Reading list";
+    const chunks = chunkNote(note(content), 512, 64);
+    expect(chunks.map((c) => c.text)).toEqual(["Index", "Projects", "Reading list"]);
   });
 
   it("strips frontmatter before chunking", () => {

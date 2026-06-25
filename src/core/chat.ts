@@ -4,14 +4,15 @@
  * Each user turn runs a fresh hybrid retrieval over the vault, so answers stay
  * grounded in whatever is currently most relevant rather than drifting. The
  * engine keeps a bounded conversation history and threads it into a
- * prompt-injection-safe prompt (the same `<context>` framing and grounding rules
- * the one-shot Q&A engine uses), refuses when retrieval is weak, and binds each
- * answer's `[[note]]` citations back to real note paths.
+ * prompt-injection-safe prompt (retrieved chunks delimited as untrusted
+ * `<context>`), and binds each answer's `[[note]]` citations back to real note
+ * paths.
  *
  * With the default `none` backend the reply is extractive (the most relevant
- * passages for the latest message); a conversational reply that uses prior turns
- * requires the `ollama` or `hosted` generation backend, which receive the full
- * threaded prompt. Nothing here imports `obsidian`.
+ * passages for the latest message) and refuses when retrieval is weak; a
+ * conversational reply that uses prior turns requires the `ollama`, `lmstudio`,
+ * or `hosted` generation backend, which receive the full threaded prompt.
+ * Nothing here imports `obsidian`.
  */
 
 import { CHAT_HISTORY_TURNS, QA_CONTEXT_CHUNKS, QA_SIMILARITY_FLOOR } from "./config";
@@ -24,8 +25,7 @@ import type { VectorStore } from "./vectorStore";
 /**
  * Chat answering rules: prefer the retrieved notes and cite them, but fall back
  * to the model's general knowledge (clearly flagged) when the notes don't cover
- * the question — rather than refusing outright. Distinct from the one-shot Q&A
- * engine's stricter "answer only from context or refuse" rules.
+ * the question — rather than refusing outright.
  */
 export const CHAT_RULES = [
   "You are a helpful assistant answering questions about the user's personal notes.",
@@ -138,7 +138,8 @@ export class ChatEngine {
     } = this.deps;
 
     const priorHistory = this.turns.slice(-historyTurns);
-    this.turns.push({ role: "user", content: message, citations: [], refused: false });
+    const userTurn: ChatMessage = { role: "user", content: message, citations: [], refused: false };
+    this.turns.push(userTurn);
 
     const context = await rank({
       query: message,
@@ -151,7 +152,10 @@ export class ChatEngine {
       queryInstruction,
     });
 
-    const topSimilarity = context[0]?.semanticScore ?? 0;
+    // Grounding is decided on the strongest SEMANTIC match, not on context[0]:
+    // results are ordered by the blended hybrid score, so a lexical-heavy hit
+    // can rank first with a lower cosine than a later, more-relevant chunk.
+    const topSimilarity = context.reduce((max, r) => Math.max(max, r.semanticScore), 0);
     const grounded = context.length > 0 && topSimilarity >= similarityFloor;
 
     // The offline extractive backend has no model to fall back on, so a weak
@@ -176,7 +180,14 @@ export class ChatEngine {
       context,
       prompt: buildChatPrompt(message, context, priorHistory),
     };
-    const answer = await generator.generate(request);
+    let answer: string;
+    try {
+      answer = await generator.generate(request);
+    } catch (error) {
+      // A failed turn must not pollute history (it would mislead later prompts).
+      this.turns.pop();
+      throw error;
+    }
     const reply: ChatMessage = {
       role: "assistant",
       content: answer,

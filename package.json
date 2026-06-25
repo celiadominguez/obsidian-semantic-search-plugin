@@ -1,6 +1,6 @@
 {
   "name": "vaultsleuth",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Local-first semantic search and cited chat across an Obsidian vault, with embedding and retrieval running fully on-device.",
   "type": "module",
   "license": "MIT",

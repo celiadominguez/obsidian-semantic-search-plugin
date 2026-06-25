@@ -68,6 +68,14 @@ export default class VaultSleuthPlugin extends Plugin implements SettingsHost {
     this.app.workspace.onLayoutReady(() => void this.bootstrapIndex());
   }
 
+  public onunload(): void {
+    // Cancel any pending debounced re-index so it can't fire after teardown.
+    if (this.debounceTimer !== null) {
+      window.clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+  }
+
   private async bootstrapIndex(): Promise<void> {
     const loaded = await this.index.loadPersisted();
     if (!loaded) {
@@ -148,13 +156,17 @@ export default class VaultSleuthPlugin extends Plugin implements SettingsHost {
 
   /** Re-embed the entire vault, surfacing progress in the status bar. */
   public async requestReindex(): Promise<void> {
-    new Notice("VaultSleuth: indexing vault…");
+    new Notice("Indexing vault…");
     await this.index.reindexAll((done, total) => {
       this.setStatus(`indexing ${done}/${total}`);
     });
     const { chunks, notes } = this.index.stats();
+    if (notes === 0) {
+      this.setStatus("no notes to index");
+      return;
+    }
     this.setStatus(`indexed (${chunks} chunks)`);
-    new Notice(`VaultSleuth: indexed ${notes} notes (${chunks} chunks)`);
+    new Notice(`Indexed ${notes} notes (${chunks} chunks)`);
   }
 
   private setStatus(text: string): void {
@@ -168,10 +180,11 @@ export default class VaultSleuthPlugin extends Plugin implements SettingsHost {
   public async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
     this.index?.updateSettings(this.settings);
-    // Reflect backend changes (e.g. enabling/disabling chat) in any open view.
+    // Reflect backend/model changes in any open view: rebuild its chat engine
+    // against the new settings and enable/disable the Chat tab accordingly.
     for (const leaf of this.app.workspace.getLeavesOfType(VAULTSLEUTH_VIEW_TYPE)) {
       if (leaf.view instanceof VaultSleuthView) {
-        leaf.view.updateChatChrome();
+        leaf.view.onSettingsChanged();
       }
     }
   }

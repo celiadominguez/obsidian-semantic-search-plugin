@@ -20,3 +20,6 @@ demo-vault/.obsidian/
 
 # OS noise
 .DS_Store
+
+# Local tooling config (not part of the plugin)
+.claude/

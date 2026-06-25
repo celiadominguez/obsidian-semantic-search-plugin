@@ -15,7 +15,7 @@
 
 import type { Chunk, NoteInput } from "./types";
 
-const FRONTMATTER_RE = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/;
+const FRONTMATTER_RE = /^---\r?\n(?:[\s\S]*?\r?\n)?---\r?\n?/;
 const HEADING_RE = /^(#{1,6})\s+(.*)$/;
 
 /** Remove a leading YAML frontmatter block, if present. */
@@ -37,7 +37,9 @@ function splitIntoSections(content: string): Section[] {
 
   const flush = (): void => {
     const body = buffer.join("\n").trim();
-    if (body.length > 0) {
+    // Keep heading-only sections (e.g. Map-of-Content notes) so their heading
+    // text still gets indexed; drop only the empty pre-first-heading preamble.
+    if (body.length > 0 || heading.length > 0) {
       sections.push({ heading, body });
     }
     buffer = [];
@@ -99,6 +101,18 @@ export function chunkNote(note: NoteInput, chunkTokens: number, chunkOverlap: nu
   for (const section of sections) {
     const tokens = tokenize(section.body);
     if (tokens.length === 0) {
+      // A heading with no body still carries meaning (index/MoC notes); index it.
+      if (section.heading.length > 0) {
+        const ordinal = chunks.length;
+        chunks.push({
+          id: `${note.path}#${ordinal}`,
+          notePath: note.path,
+          noteTitle: note.title,
+          heading: section.heading,
+          ordinal,
+          text: section.heading,
+        });
+      }
       continue;
     }
     for (const window of windowTokens(tokens, chunkTokens, overlap)) {

@@ -27,6 +27,9 @@ export class Bm25Index {
   private readonly docFreq = new Map<string, number>();
   private readonly docTermFreq = new Map<string, Map<string, number>>();
   private readonly docLength = new Map<string, number>();
+  /** Inverted index: term -> set of document ids containing it, so scoring a
+   * query visits only matching documents instead of the whole corpus. */
+  private readonly postings = new Map<string, Set<string>>();
   private totalLength = 0;
 
   /** Number of indexed documents. */
@@ -51,6 +54,12 @@ export class Bm25Index {
     }
     for (const term of termFreq.keys()) {
       this.docFreq.set(term, (this.docFreq.get(term) ?? 0) + 1);
+      let posting = this.postings.get(term);
+      if (posting === undefined) {
+        posting = new Set<string>();
+        this.postings.set(term, posting);
+      }
+      posting.add(id);
     }
     this.docTermFreq.set(id, termFreq);
     this.docLength.set(id, tokens.length);
@@ -70,6 +79,13 @@ export class Bm25Index {
       } else {
         this.docFreq.set(term, next);
       }
+      const posting = this.postings.get(term);
+      if (posting !== undefined) {
+        posting.delete(id);
+        if (posting.size === 0) {
+          this.postings.delete(term);
+        }
+      }
     }
     this.totalLength -= this.docLength.get(id) ?? 0;
     this.docTermFreq.delete(id);
@@ -81,6 +97,7 @@ export class Bm25Index {
     this.docFreq.clear();
     this.docTermFreq.clear();
     this.docLength.clear();
+    this.postings.clear();
     this.totalLength = 0;
   }
 
@@ -110,8 +127,9 @@ export class Bm25Index {
       if (idf === 0) {
         continue;
       }
-      for (const [id, termFreq] of this.docTermFreq) {
-        const tf = termFreq.get(term);
+      // Visit only the documents that actually contain this term.
+      for (const id of this.postings.get(term) ?? []) {
+        const tf = this.docTermFreq.get(id)?.get(term);
         if (tf === undefined) {
           continue;
         }

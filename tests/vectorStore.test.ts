@@ -88,22 +88,25 @@ describe("VectorStore persistence", () => {
   });
 });
 
-describe("VectorStore HNSW parity", () => {
-  it("returns the same top-k as exact cosine on a small set", async () => {
+describe("VectorStore above the HNSW threshold", () => {
+  // Note: whether the HNSW graph actually backs the search depends on the
+  // hnswlib-wasm module loading in the test environment. When it does not load,
+  // the store falls back to exact cosine. This test therefore guarantees the
+  // observable contract — correct top-k above the threshold — rather than
+  // asserting HNSW specifically (which would silently pass on the fallback).
+  it("returns correct top-k whether HNSW backs the search or it falls back to exact", async () => {
     const records = await buildRecords();
     const exact = new VectorStore({ dim: DIM, modelId: "test", hnswThreshold: 1000 });
-    const approx = new VectorStore({ dim: DIM, modelId: "test", hnswThreshold: 1 });
+    const aboveThreshold = new VectorStore({ dim: DIM, modelId: "test", hnswThreshold: 1 });
     records.forEach((r) => {
       exact.upsert(r);
-      approx.upsert(r);
+      aboveThreshold.upsert(r);
     });
-    expect(approx.usesHnsw).toBe(true);
+    expect(aboveThreshold.usesHnsw).toBe(true);
 
     const query = records[5].vector;
     const exactHits = (await exact.search(query, 3)).map((h) => h.id);
-    // Above threshold this uses HNSW when the WASM module loads, and otherwise
-    // falls back to exact cosine; either way the small-set top-k must match.
-    const approxHits = (await approx.search(query, 3)).map((h) => h.id);
-    expect(approxHits).toEqual(exactHits);
+    const hits = (await aboveThreshold.search(query, 3)).map((h) => h.id);
+    expect(hits).toEqual(exactHits);
   });
 });

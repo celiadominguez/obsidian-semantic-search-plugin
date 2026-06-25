@@ -20,7 +20,7 @@ import { cosineSimilarity } from "./embedder";
 import type { Chunk, IndexMetadata, VectorRecord } from "./types";
 
 /** On-disk schema version for the sidecar format. */
-const SIDECAR_VERSION = 1;
+export const SIDECAR_VERSION = 1;
 
 /** A scored chunk id from a vector search (score is cosine similarity). */
 export interface SemanticHit {

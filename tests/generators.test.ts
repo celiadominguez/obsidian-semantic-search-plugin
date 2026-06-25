@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   HostedGenerator,
   LmStudioGenerator,
+  OllamaGenerator,
   createGenerator,
   listOllamaModels,
   listOpenAiModels,
@@ -21,15 +22,65 @@ function stubFetch(handler: (url: string, init?: RequestInit) => unknown): void 
   );
 }
 
+/** Stub fetch with a non-2xx response to exercise the error branches. */
+function stubFetchStatus(status: number): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () => ({ ok: false, status, statusText: "ERR", json: async () => ({}) }) as Response,
+    ),
+  );
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe("createGenerator", () => {
-  it("selects the LM Studio generator for the lmstudio backend", () => {
-    const settings = { ...defaultSettings(), generationBackend: "lmstudio" as const };
-    const generator = createGenerator(settings);
-    expect(generator.id).toBe("lmstudio");
+  it("maps each backend setting to the matching generator", () => {
+    const base = defaultSettings();
+    expect(createGenerator({ ...base, generationBackend: "none" }).id).toBe("none");
+    expect(createGenerator({ ...base, generationBackend: "ollama" }).id).toBe("ollama");
+    expect(createGenerator({ ...base, generationBackend: "lmstudio" }).id).toBe("lmstudio");
+    expect(createGenerator({ ...base, generationBackend: "hosted" }).id).toBe("hosted");
+  });
+});
+
+describe("OllamaGenerator", () => {
+  it("posts to /api/generate with stream:false and returns data.response", async () => {
+    let calledUrl = "";
+    let sentBody: { model?: string; prompt?: string; stream?: boolean } = {};
+    stubFetch((url, init) => {
+      calledUrl = url;
+      sentBody = JSON.parse(String(init?.body));
+      return { response: "ollama answer" };
+    });
+    const answer = await new OllamaGenerator("http://localhost:11434/", "llama3.1:8b").generate(
+      REQUEST,
+    );
+    expect(calledUrl).toBe("http://localhost:11434/api/generate");
+    expect(sentBody.model).toBe("llama3.1:8b");
+    expect(sentBody.prompt).toBe("PROMPT");
+    expect(sentBody.stream).toBe(false);
+    expect(answer).toBe("ollama answer");
+  });
+});
+
+describe("generation error handling", () => {
+  it("rejects when the backend returns a non-ok status", async () => {
+    stubFetchStatus(500);
+    await expect(
+      new OllamaGenerator("http://localhost:11434", "m").generate(REQUEST),
+    ).rejects.toThrow(/500/);
+    await expect(
+      new LmStudioGenerator("http://localhost:1234/v1", "m").generate(REQUEST),
+    ).rejects.toThrow(/500/);
+  });
+
+  it("rejects model listing on a non-ok status", async () => {
+    stubFetchStatus(503);
+    await expect(listOpenAiModels("http://localhost:1234/v1")).rejects.toThrow(/503/);
+    await expect(listOllamaModels("http://localhost:11434")).rejects.toThrow(/503/);
   });
 });
 

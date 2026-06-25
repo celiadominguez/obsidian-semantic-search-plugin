@@ -7,7 +7,7 @@
 /** Identifier of a supported on-device embedding model. */
 export type EmbeddingModelId = "Xenova/bge-small-en-v1.5" | "Xenova/all-MiniLM-L6-v2";
 
-/** Q&A generation backend selector. */
+/** Chat generation backend selector. */
 export type GenerationBackend = "none" | "ollama" | "lmstudio" | "hosted";
 
 /** Persisted, user-facing configuration. Every key has a default (see config.ts). */
@@ -129,7 +129,7 @@ export interface GenerationRequest {
   prompt: string;
 }
 
-/** Pluggable text generator used by the Q&A engine. */
+/** Pluggable text generator used by the chat engine. */
 export interface Generator {
   readonly id: GenerationBackend;
   /** Produce an answer grounded in the request's retrieved context. */

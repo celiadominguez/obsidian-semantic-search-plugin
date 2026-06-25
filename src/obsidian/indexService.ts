@@ -15,6 +15,7 @@
 import type { App, TFile } from "obsidian";
 import { EMBED_BATCH_SIZE } from "../core/config";
 import { chunkNote } from "../core/chunker";
+import { embedInput, lexicalInput } from "../core/indexSurface";
 import { hashText } from "../core/hash";
 import { rank } from "../core/hybridRanker";
 import { TransformersEmbedder } from "../core/embedder";
@@ -22,15 +23,9 @@ import { createGenerator } from "../core/qa";
 import { ChatEngine } from "../core/chat";
 import { Bm25Index } from "../core/bm25";
 import { obsidianHttpClient } from "./obsidianHttp";
-import { VectorStore, type VectorSidecar } from "../core/vectorStore";
+import { SIDECAR_VERSION, VectorStore, type VectorSidecar } from "../core/vectorStore";
 import { EMBEDDING_MODELS, type EmbeddingModelInfo } from "../core/config";
-import type {
-  Chunk,
-  NoteInput,
-  RankingMode,
-  SearchResult,
-  VaultSleuthSettings,
-} from "../core/types";
+import type { NoteInput, RankingMode, SearchResult, VaultSleuthSettings } from "../core/types";
 
 const VECTOR_BLOB_FILE = "index.bin";
 const SIDECAR_FILE = "index.json";
@@ -44,16 +39,6 @@ export interface IndexStats {
   chunks: number;
   modelId: string;
   usesHnsw: boolean;
-}
-
-/** Combine title and heading context with chunk text for lexical indexing. */
-function lexicalInput(chunk: Chunk): string {
-  return `${chunk.noteTitle} ${chunk.heading} ${chunk.text}`.trim();
-}
-
-/** Build the text actually fed to the embedding model for a chunk. */
-function embedInput(chunk: Chunk): string {
-  return chunk.heading.length > 0 ? `${chunk.heading}\n${chunk.text}` : chunk.text;
 }
 
 export class IndexService {
@@ -96,9 +81,14 @@ export class IndexService {
   /** Apply updated settings; a model change requires a full re-index by the caller. */
   public updateSettings(settings: VaultSleuthSettings): void {
     const modelChanged = settings.embeddingModel !== this.settings.embeddingModel;
+    const accelChanged = settings.useWebGPU !== this.settings.useWebGPU;
     this.settings = settings;
-    if (modelChanged) {
+    // A WebGPU toggle only needs a fresh embedder (the pipeline caches its device);
+    // a model change additionally invalidates the stored vectors.
+    if (modelChanged || accelChanged) {
       this.embedder = this.createEmbedder();
+    }
+    if (modelChanged) {
       this.store = this.createStore();
       this.bm25.clear();
       this.indexedNotes.clear();
@@ -146,7 +136,14 @@ export class IndexService {
     }
     try {
       const sidecar = JSON.parse(await adapter.read(this.sidecarPath())) as VectorSidecar;
-      if (sidecar.meta.modelId !== this.settings.embeddingModel) {
+      // Reject an index produced by a different model, dimension, or on-disk
+      // schema version — any mismatch means the vectors can't be trusted, so we
+      // fall through to a fresh re-index rather than load stale/incompatible data.
+      if (
+        sidecar.meta.modelId !== this.settings.embeddingModel ||
+        sidecar.meta.dim !== this.modelDim() ||
+        sidecar.meta.version !== SIDECAR_VERSION
+      ) {
         return false;
       }
       const buffer = await adapter.readBinary(this.vectorBlobPath());
@@ -274,9 +271,23 @@ export class IndexService {
     });
   }
 
-  /** Whether a generative backend is configured (chat replies synthesize vs extract). */
+  /**
+   * Whether a usable generative backend is configured. Beyond "not none", the
+   * selected backend must actually have the fields it needs, so chat isn't
+   * enabled into an opaque failure (e.g. hosted with no endpoint/model/key).
+   */
   public get hasGenerativeBackend(): boolean {
-    return this.settings.generationBackend !== "none";
+    const s = this.settings;
+    switch (s.generationBackend) {
+      case "ollama":
+        return s.ollamaEndpoint.length > 0 && s.ollamaModel.length > 0;
+      case "lmstudio":
+        return s.lmstudioEndpoint.length > 0 && s.lmstudioModel.length > 0;
+      case "hosted":
+        return s.hostedEndpoint.length > 0 && s.hostedModel.length > 0 && s.hostedApiKey.length > 0;
+      default:
+        return false;
+    }
   }
 
   /** Human-readable summary of the active answer model, for the chat header. */

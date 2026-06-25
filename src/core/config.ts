@@ -69,12 +69,13 @@ export const HNSW_EF_CONSTRUCTION = 200;
 export const HNSW_EF_SEARCH = 64;
 
 /**
- * Cosine-similarity floor for cited Q&A. When the best retrieved chunk scores
- * below this, the answer engine refuses rather than fabricate from weak context.
+ * Fallback cosine floor for chat refusal, used only when a caller does not
+ * supply one. In the plugin the per-model `EMBEDDING_MODELS[*].similarityFloor`
+ * is always passed, so this default is exercised mainly by tests.
  */
 export const QA_SIMILARITY_FLOOR = 0.35;
 
-/** Number of chunks fed to the Q&A context window. */
+/** Number of chunks fed to the chat context window. */
 export const QA_CONTEXT_CHUNKS = 6;
 
 /** Most recent conversation turns carried into a chat prompt (bounds prompt size). */
@@ -98,7 +99,7 @@ export const INDEX_DEBOUNCE_MS = 1500;
 /** Batch size for embedding chunks, balancing throughput against memory. */
 export const EMBED_BATCH_SIZE = 32;
 
-/** Available Q&A generation backends. */
+/** Available chat generation backends. */
 export const GENERATION_BACKENDS: GenerationBackend[] = ["none", "ollama", "lmstudio", "hosted"];
 
 /** Factory for the default settings of a fresh, fully-offline install. */
