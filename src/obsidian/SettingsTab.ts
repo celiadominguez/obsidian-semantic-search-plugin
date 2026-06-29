@@ -6,7 +6,7 @@
  * grouped and clearly labelled as opt-in.
  */
 
-import { type Plugin, PluginSettingTab, Setting } from "obsidian";
+import { normalizePath, type Plugin, PluginSettingTab, Setting } from "obsidian";
 import {
   EMBEDDING_MODELS,
   GENERATION_BACKENDS,
@@ -68,7 +68,10 @@ export class SettingsTab extends PluginSettingTab {
           .setPlaceholder("e.g. models")
           .setValue(settings.localModelPath)
           .onChange(async (value) => {
-            settings.localModelPath = value.trim();
+            const trimmed = value.trim();
+            // Normalize user-entered paths; keep "" (disabled) as-is — normalizePath
+            // turns an empty string into "/", which would look like a real folder.
+            settings.localModelPath = trimmed.length > 0 ? normalizePath(trimmed) : "";
             await this.host.saveSettings();
           }),
       );
@@ -158,7 +161,8 @@ export class SettingsTab extends PluginSettingTab {
           settings.excludedFolders = value
             .split(",")
             .map((folder) => folder.trim())
-            .filter((folder) => folder.length > 0);
+            .filter((folder) => folder.length > 0)
+            .map((folder) => normalizePath(folder));
           await this.host.saveSettings();
         }),
       );

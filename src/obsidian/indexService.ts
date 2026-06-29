@@ -12,7 +12,7 @@
  * `<pluginDir>/index.bin` and `<pluginDir>/index.json`.
  */
 
-import type { App, TFile } from "obsidian";
+import { normalizePath, type App, type TFile } from "obsidian";
 import { EMBED_BATCH_SIZE } from "../core/config";
 import { chunkNote } from "../core/chunker";
 import { embedInput, lexicalInput } from "../core/indexSurface";
@@ -58,7 +58,7 @@ export class IndexService {
   constructor(app: App, settings: VaultSleuthSettings, pluginDir: string) {
     this.app = app;
     this.settings = settings;
-    this.pluginDir = pluginDir;
+    this.pluginDir = normalizePath(pluginDir);
     this.embedder = this.createEmbedder();
     this.store = this.createStore();
   }
@@ -85,13 +85,21 @@ export class IndexService {
     });
   }
 
-  /** Read a model file from the user's local model folder, or undefined if absent. */
+  /**
+   * Read a model file from the user's local model folder via the Vault API
+   * (the files live inside the vault), or undefined if absent. The path is
+   * normalized since the folder comes from user-entered settings.
+   */
   private async readLocalModelFile(
     folder: string,
     relativePath: string,
   ): Promise<ArrayBuffer | undefined> {
+    const file = this.app.vault.getFileByPath(normalizePath(`${folder}/${relativePath}`));
+    if (file === null) {
+      return undefined;
+    }
     try {
-      return await this.app.vault.adapter.readBinary(`${folder}/${relativePath}`);
+      return await this.app.vault.readBinary(file);
     } catch {
       return undefined;
     }
@@ -123,11 +131,11 @@ export class IndexService {
   }
 
   private vectorBlobPath(): string {
-    return `${this.pluginDir}/${VECTOR_BLOB_FILE}`;
+    return normalizePath(`${this.pluginDir}/${VECTOR_BLOB_FILE}`);
   }
 
   private sidecarPath(): string {
-    return `${this.pluginDir}/${SIDECAR_FILE}`;
+    return normalizePath(`${this.pluginDir}/${SIDECAR_FILE}`);
   }
 
   /** Whether a note path falls under an excluded folder. */
