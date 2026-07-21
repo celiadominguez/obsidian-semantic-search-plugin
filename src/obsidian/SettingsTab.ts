@@ -1,12 +1,20 @@
 /**
  * Settings tab exposing every configuration key. Each control reads from and
- * writes to the host plugin's settings and persists immediately. Changing the
- * embedding model re-indexes automatically; chunking changes take effect on the
- * next manual re-index. Privacy-sensitive controls (hosted generation) are
- * grouped and clearly labelled as opt-in.
+ * writes to the host plugin's settings and persists immediately.
+ *
+ * Organized by how often a setting is touched, so the everyday knobs come first
+ * and the tuning ones stay out of the way:
+ *   1. Search & indexing — embedding source/model, excluded folders
+ *   2. Chat (answer generation) — backend + its fields
+ *   3. Advanced (tuning) — chunking, hybrid blend, HNSW threshold
+ *   4. Maintenance — index status + rebuild
+ *
+ * Changing the embedding model re-indexes automatically; chunking and other
+ * tuning changes take effect on the next rebuild. Anything that sends data off
+ * the machine (hosted generation, remote embeddings) is clearly labelled opt-in.
  */
 
-import { normalizePath, type Plugin, PluginSettingTab, Setting } from "obsidian";
+import { Notice, normalizePath, type Plugin, PluginSettingTab, Setting } from "obsidian";
 import {
   EMBEDDING_MODELS,
   GENERATION_BACKENDS,
@@ -14,8 +22,24 @@ import {
   MAX_HNSW_THRESHOLD,
 } from "../core/config";
 import { listOllamaModels, listOpenAiModels } from "../core/generation";
+import { detectRemoteEmbeddingDim } from "../core/remoteEmbedder";
 import { obsidianHttpClient } from "./obsidianHttp";
-import type { EmbeddingModelId, GenerationBackend, VaultSleuthSettings } from "../core/types";
+import type { IndexStats } from "./indexService";
+import type {
+  EmbeddingModelId,
+  EmbeddingSource,
+  GenerationBackend,
+  RemoteEmbeddingProtocol,
+  VaultSleuthSettings,
+} from "../core/types";
+
+/** Human-readable labels for the chat backend dropdown (values stay the ids). */
+const GENERATION_BACKEND_LABELS: Record<GenerationBackend, string> = {
+  none: "None — offline, retrieval only (default)",
+  ollama: "Ollama (local server)",
+  lmstudio: "LM Studio (local server)",
+  hosted: "Hosted API (opt-in, sends chunks out)",
+};
 
 /** What the settings tab needs from the plugin, decoupled from the class. */
 export interface SettingsHost extends Plugin {
@@ -23,6 +47,8 @@ export interface SettingsHost extends Plugin {
   saveSettings(): Promise<void>;
   /** Re-embed the whole vault (after a model or chunking change). */
   requestReindex(): Promise<void>;
+  /** Current index statistics, for the maintenance status readout. */
+  indexStats(): IndexStats;
 }
 
 export class SettingsTab extends PluginSettingTab {
@@ -38,123 +64,83 @@ export class SettingsTab extends PluginSettingTab {
     containerEl.empty();
     const settings = this.host.settings;
 
-    new Setting(containerEl).setName("Embedding").setHeading();
+    // Ordered by how often it's touched: everyday indexing/search settings, then
+    // chat, then power-user tuning, then maintenance actions.
+    this.displaySearchIndexing(containerEl, settings);
+    this.displayChat(containerEl, settings);
+    this.displayAdvanced(containerEl, settings);
+    this.displayMaintenance(containerEl);
+  }
+
+  /** Everyday settings: where embeddings come from, and what to index. */
+  private displaySearchIndexing(containerEl: HTMLElement, settings: VaultSleuthSettings): void {
+    new Setting(containerEl).setName("Search & indexing").setHeading();
 
     new Setting(containerEl)
-      .setName("Embedding model")
-      .setDesc("On-device model used to embed notes. Changing it triggers a full re-index.")
+      .setName("Embedding source")
+      .setDesc(
+        "Where embeddings are computed. 'On-device' runs the bundled model locally — " +
+          "nothing leaves your machine. 'Remote server' delegates to an embeddings API: " +
+          "private if you point it at localhost (Ollama / LM Studio), but it sends your " +
+          "note text off your machine if you point it at a hosted service. " +
+          "Switching clears the index — rebuild it afterwards.",
+      )
       .addDropdown((dropdown) => {
-        for (const [id, info] of Object.entries(EMBEDDING_MODELS)) {
-          dropdown.addOption(id, info.label);
-        }
-        dropdown.setValue(settings.embeddingModel).onChange(async (value) => {
-          settings.embeddingModel = value as EmbeddingModelId;
+        dropdown.addOption("on-device", "On-device (default)");
+        dropdown.addOption("remote", "Remote server");
+        dropdown.setValue(settings.embeddingSource).onChange(async (value) => {
+          settings.embeddingSource = value as EmbeddingSource;
           await this.host.saveSettings();
-          await this.host.requestReindex();
+          // Re-render so the source's own fields replace the other's.
+          this.display();
         });
       });
 
-    new Setting(containerEl)
-      .setName("Local model folder (offline, advanced)")
-      .setDesc(
-        "Optional. A vault folder containing the model files, laid out as " +
-          "<folder>/<model id>/… (e.g. onnx/model_quantized.onnx, config.json, " +
-          "tokenizer.json). When set, the model loads from disk and is never " +
-          "downloaded. Leave empty to download it once from Hugging Face. " +
-          "Experimental — re-index and confirm search still works after setting it.",
-      )
-      .addText((text) =>
-        text
-          .setPlaceholder("e.g. models")
-          .setValue(settings.localModelPath)
-          .onChange(async (value) => {
-            const trimmed = value.trim();
-            // Normalize user-entered paths; keep "" (disabled) as-is — normalizePath
-            // turns an empty string into "/", which would look like a real folder.
-            settings.localModelPath = trimmed.length > 0 ? normalizePath(trimmed) : "";
-            await this.host.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl).setName("Chunking").setHeading();
-
-    new Setting(containerEl)
-      .setName("Chunk size (tokens)")
-      .setDesc(
-        `Approximate tokens per chunk (max ${MAX_CHUNK_TOKENS}). ` +
-          'Takes effect on the next "Re-index vault".',
-      )
-      .addText((text) =>
-        text.setValue(String(settings.chunkTokens)).onChange(async (value) => {
-          const parsed = Number.parseInt(value, 10);
-          if (Number.isFinite(parsed) && parsed > 0) {
-            const clamped = Math.min(parsed, MAX_CHUNK_TOKENS);
-            settings.chunkTokens = clamped;
-            if (clamped !== parsed) {
-              text.setValue(String(clamped));
-            }
-            await this.host.saveSettings();
+    if (settings.embeddingSource === "on-device") {
+      new Setting(containerEl)
+        .setName("Embedding model")
+        .setDesc("On-device model used to embed notes. Changing it triggers a full re-index.")
+        .addDropdown((dropdown) => {
+          for (const [id, info] of Object.entries(EMBEDDING_MODELS)) {
+            dropdown.addOption(id, info.label);
           }
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName("Chunk overlap (tokens)")
-      .setDesc('Token overlap between adjacent chunks. Takes effect on the next "Re-index vault".')
-      .addText((text) =>
-        text.setValue(String(settings.chunkOverlap)).onChange(async (value) => {
-          const parsed = Number.parseInt(value, 10);
-          if (Number.isFinite(parsed) && parsed >= 0) {
-            const clamped = Math.min(parsed, MAX_CHUNK_TOKENS);
-            settings.chunkOverlap = clamped;
-            if (clamped !== parsed) {
-              text.setValue(String(clamped));
-            }
+          dropdown.setValue(settings.embeddingModel).onChange(async (value) => {
+            settings.embeddingModel = value as EmbeddingModelId;
             await this.host.saveSettings();
-          }
-        }),
-      );
+            await this.host.requestReindex();
+          });
+        });
 
-    new Setting(containerEl).setName("Ranking").setHeading();
-
-    new Setting(containerEl)
-      .setName("Hybrid alpha")
-      .setDesc("Blend weight: 1.0 is purely semantic, 0.0 is purely lexical (BM25).")
-      .addSlider((slider) =>
-        slider
-          .setLimits(0, 1, 0.05)
-          .setValue(settings.hybridAlpha)
-          .setDynamicTooltip()
-          .onChange(async (value) => {
-            settings.hybridAlpha = value;
-            await this.host.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName("HNSW threshold")
-      .setDesc(
-        "Chunk count above which the approximate HNSW index is used instead of exact cosine.",
-      )
-      .addText((text) =>
-        text.setValue(String(settings.hnswThreshold)).onChange(async (value) => {
-          const parsed = Number.parseInt(value, 10);
-          if (Number.isFinite(parsed) && parsed > 0) {
-            const clamped = Math.min(parsed, MAX_HNSW_THRESHOLD);
-            settings.hnswThreshold = clamped;
-            if (clamped !== parsed) {
-              text.setValue(String(clamped));
-            }
-            await this.host.saveSettings();
-          }
-        }),
-      );
+      new Setting(containerEl)
+        .setName("Local model folder (offline, advanced)")
+        .setDesc(
+          "Optional. A vault folder containing the model files, laid out as " +
+            "<folder>/<model id>/… (e.g. onnx/model_quantized.onnx, config.json, " +
+            "tokenizer.json). When set, the model loads from disk and is never " +
+            "downloaded. Leave empty to download it once from Hugging Face. " +
+            "Experimental — rebuild the index and confirm search still works after setting it.",
+        )
+        .addText((text) =>
+          text
+            .setPlaceholder("e.g. models")
+            .setValue(settings.localModelPath)
+            .onChange(async (value) => {
+              const trimmed = value.trim();
+              // Normalize user-entered paths; keep "" (disabled) as-is — normalizePath
+              // turns an empty string into "/", which would look like a real folder.
+              settings.localModelPath = trimmed.length > 0 ? normalizePath(trimmed) : "";
+              await this.host.saveSettings();
+            }),
+        );
+    } else {
+      this.displayRemoteEmbedding(containerEl, settings);
+    }
 
     new Setting(containerEl)
       .setName("Excluded folders")
       .setDesc(
         "Comma-separated vault paths to skip when indexing. Applies to new edits immediately; " +
-          'run "Re-index vault" to drop already-indexed notes.',
+          "rebuild the index (below) to drop already-indexed notes.",
       )
       .addTextArea((text) =>
         text.setValue(settings.excludedFolders.join(", ")).onChange(async (value) => {
@@ -166,19 +152,22 @@ export class SettingsTab extends PluginSettingTab {
           await this.host.saveSettings();
         }),
       );
+  }
 
+  /** Chat backend selector plus the fields the chosen backend needs. */
+  private displayChat(containerEl: HTMLElement, settings: VaultSleuthSettings): void {
     new Setting(containerEl).setName("Chat (answer generation)").setHeading();
 
     new Setting(containerEl)
       .setName("Generation backend")
       .setDesc(
-        "How cited answers are generated. 'none' is fully offline (retrieval-only). " +
-          "'ollama' and 'lmstudio' use a local server. 'hosted' is opt-in. All non-'none' " +
-          "backends send only the retrieved chunks, never the whole vault.",
+        "How cited answers are generated. 'None' is fully offline (retrieval-only). " +
+          "Ollama and LM Studio use a local server. Hosted is opt-in. Every non-None " +
+          "backend sends only the retrieved chunks, never the whole vault.",
       )
       .addDropdown((dropdown) => {
         for (const backend of GENERATION_BACKENDS) {
-          dropdown.addOption(backend, backend);
+          dropdown.addOption(backend, GENERATION_BACKEND_LABELS[backend]);
         }
         dropdown.setValue(settings.generationBackend).onChange(async (value) => {
           settings.generationBackend = value as GenerationBackend;
@@ -263,6 +252,257 @@ export class SettingsTab extends PluginSettingTab {
     }
   }
 
+  /** Power-user tuning. Every field here has a sensible default; most users never touch it. */
+  private displayAdvanced(containerEl: HTMLElement, settings: VaultSleuthSettings): void {
+    new Setting(containerEl).setName("Advanced (tuning)").setHeading();
+
+    new Setting(containerEl)
+      .setName("Chunk size (tokens)")
+      .setDesc(
+        `Approximate tokens per chunk (max ${MAX_CHUNK_TOKENS}). ` +
+          "Takes effect on the next index rebuild.",
+      )
+      .addText((text) =>
+        text.setValue(String(settings.chunkTokens)).onChange(async (value) => {
+          const parsed = Number.parseInt(value, 10);
+          if (Number.isFinite(parsed) && parsed > 0) {
+            const clamped = Math.min(parsed, MAX_CHUNK_TOKENS);
+            settings.chunkTokens = clamped;
+            if (clamped !== parsed) {
+              text.setValue(String(clamped));
+            }
+            await this.host.saveSettings();
+          }
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName("Chunk overlap (tokens)")
+      .setDesc("Token overlap between adjacent chunks. Takes effect on the next index rebuild.")
+      .addText((text) =>
+        text.setValue(String(settings.chunkOverlap)).onChange(async (value) => {
+          const parsed = Number.parseInt(value, 10);
+          if (Number.isFinite(parsed) && parsed >= 0) {
+            const clamped = Math.min(parsed, MAX_CHUNK_TOKENS);
+            settings.chunkOverlap = clamped;
+            if (clamped !== parsed) {
+              text.setValue(String(clamped));
+            }
+            await this.host.saveSettings();
+          }
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName("Hybrid alpha")
+      .setDesc("Search blend: 1.0 is purely semantic, 0.0 is purely lexical (BM25).")
+      .addSlider((slider) =>
+        slider
+          .setLimits(0, 1, 0.05)
+          .setValue(settings.hybridAlpha)
+          .setDynamicTooltip()
+          .onChange(async (value) => {
+            settings.hybridAlpha = value;
+            await this.host.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("HNSW threshold")
+      .setDesc(
+        "Chunk count above which the approximate HNSW index is used instead of exact cosine.",
+      )
+      .addText((text) =>
+        text.setValue(String(settings.hnswThreshold)).onChange(async (value) => {
+          const parsed = Number.parseInt(value, 10);
+          if (Number.isFinite(parsed) && parsed > 0) {
+            const clamped = Math.min(parsed, MAX_HNSW_THRESHOLD);
+            settings.hnswThreshold = clamped;
+            if (clamped !== parsed) {
+              text.setValue(String(clamped));
+            }
+            await this.host.saveSettings();
+          }
+        }),
+      );
+  }
+
+  /** Index status readout and the rebuild action. */
+  private displayMaintenance(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName("Maintenance").setHeading();
+
+    const statusSetting = new Setting(containerEl)
+      .setName("Index status")
+      .setDesc(this.indexStatusText());
+
+    new Setting(containerEl)
+      .setName("Rebuild index")
+      .setDesc(
+        "Notes are indexed automatically as you create, edit, rename, or delete them. " +
+          "Use this to rebuild the whole index and embeddings from scratch — e.g. after " +
+          "changing chunking or embedding settings, or if search results look stale.",
+      )
+      .addButton((button) => {
+        button
+          .setButtonText("Rebuild index")
+          .setCta()
+          .onClick(async () => {
+            button.setDisabled(true).setButtonText("Rebuilding…");
+            try {
+              await this.host.requestReindex();
+            } finally {
+              button.setDisabled(false).setButtonText("Rebuild index");
+              statusSetting.setDesc(this.indexStatusText());
+            }
+          });
+      });
+  }
+
+  /**
+   * Controls for the opt-in remote embeddings server: wire format, endpoint,
+   * model, dimension (detectable), and an optional key. The dimension must match
+   * what the server actually returns, so it is verifiable here rather than
+   * failing deep inside an indexing run.
+   */
+  private displayRemoteEmbedding(containerEl: HTMLElement, settings: VaultSleuthSettings): void {
+    new Setting(containerEl)
+      .setName("Server type")
+      .setDesc(
+        "'OpenAI-compatible' works with LM Studio, Text Embeddings Inference, Infinity, " +
+          "and hosted APIs (POST /embeddings). 'Ollama' uses its native POST /api/embed.",
+      )
+      .addDropdown((dropdown) => {
+        dropdown.addOption("openai", "OpenAI-compatible");
+        dropdown.addOption("ollama", "Ollama");
+        dropdown.setValue(settings.remoteEmbeddingProtocol).onChange(async (value) => {
+          settings.remoteEmbeddingProtocol = value as RemoteEmbeddingProtocol;
+          await this.host.saveSettings();
+          this.display();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Embeddings endpoint")
+      .setDesc(
+        settings.remoteEmbeddingProtocol === "ollama"
+          ? "Ollama base URL, e.g. http://localhost:11434"
+          : "Base URL including the version prefix, e.g. http://localhost:1234/v1",
+      )
+      .addText((text) =>
+        text.setValue(settings.remoteEmbeddingEndpoint).onChange(async (value) => {
+          settings.remoteEmbeddingEndpoint = value.trim();
+          await this.host.saveSettings();
+        }),
+      );
+
+    this.addModelDropdown(
+      containerEl,
+      "Embedding model",
+      "Pick an embedding model the server offers. Changing it clears the index — rebuild afterwards.",
+      () => settings.remoteEmbeddingModel,
+      (value) => {
+        settings.remoteEmbeddingModel = value;
+      },
+      () =>
+        settings.remoteEmbeddingProtocol === "ollama"
+          ? listOllamaModels(settings.remoteEmbeddingEndpoint, obsidianHttpClient)
+          : listOpenAiModels(
+              settings.remoteEmbeddingEndpoint,
+              settings.remoteEmbeddingApiKey,
+              obsidianHttpClient,
+            ),
+    );
+
+    new Setting(containerEl)
+      .setName("Vector dimension")
+      .setDesc(
+        "Must match what the model returns. Use Detect to ask the server, then rebuild the index.",
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("e.g. 768")
+          .setValue(settings.remoteEmbeddingDim > 0 ? String(settings.remoteEmbeddingDim) : "")
+          .onChange(async (value) => {
+            const parsed = Number.parseInt(value, 10);
+            settings.remoteEmbeddingDim = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+            await this.host.saveSettings();
+          }),
+      )
+      .addButton((button) =>
+        button
+          .setButtonText("Detect")
+          .setTooltip("Embed a short probe to read the model's dimensionality")
+          .onClick(async () => {
+            if (settings.remoteEmbeddingModel.length === 0) {
+              new Notice("Pick an embedding model first.");
+              return;
+            }
+            button.setDisabled(true).setButtonText("Detecting…");
+            try {
+              const dim = await detectRemoteEmbeddingDim({
+                protocol: settings.remoteEmbeddingProtocol,
+                endpoint: settings.remoteEmbeddingEndpoint,
+                model: settings.remoteEmbeddingModel,
+                apiKey: settings.remoteEmbeddingApiKey,
+                http: obsidianHttpClient,
+              });
+              settings.remoteEmbeddingDim = dim;
+              await this.host.saveSettings();
+              new Notice(`Detected ${dim} dimensions. Rebuild the index to apply.`);
+              this.display();
+            } catch (error) {
+              const detail = error instanceof Error ? error.message : String(error);
+              new Notice(`Couldn't detect dimensions — ${detail}`);
+            } finally {
+              button.setDisabled(false).setButtonText("Detect");
+            }
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("API key (optional)")
+      .setDesc(
+        "Only needed for servers that require auth. Stored locally and sent " +
+          "as a bearer token to the endpoint above, nowhere else.",
+      )
+      .addText((text) => {
+        text.inputEl.type = "password";
+        text.setValue(settings.remoteEmbeddingApiKey).onChange(async (value) => {
+          settings.remoteEmbeddingApiKey = value.trim();
+          await this.host.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Query instruction (advanced)")
+      .setDesc(
+        "Prepended to your query (not your notes) before embedding, for asymmetric " +
+          "models like the BGE family — e.g. 'Represent this sentence for searching " +
+          "relevant passages: '. Leave empty for symmetric models. Applies to queries " +
+          "only, so no re-index is needed.",
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("Represent this sentence for searching relevant passages: ")
+          .setValue(settings.remoteEmbeddingQueryInstruction)
+          .onChange(async (value) => {
+            settings.remoteEmbeddingQueryInstruction = value;
+            await this.host.saveSettings();
+          }),
+      );
+  }
+
+  /** One-line summary of the current index size for the maintenance section. */
+  private indexStatusText(): string {
+    const { notes, chunks } = this.host.indexStats();
+    if (notes === 0) {
+      return "No notes indexed yet.";
+    }
+    const noteWord = notes === 1 ? "note" : "notes";
+    const chunkWord = chunks === 1 ? "chunk" : "chunks";
+    return `Indexed: ${notes} ${noteWord} · ${chunks} ${chunkWord}.`;
+  }
+
   /**
    * A model setting backed by a dropdown that asynchronously lists the models a
    * local server reports. The currently-saved value is always selectable (even if
@@ -277,13 +517,18 @@ export class SettingsTab extends PluginSettingTab {
     setValue: (value: string) => void,
     fetcher: () => Promise<string[]>,
   ): void {
-    new Setting(containerEl)
+    // Re-queries the server and repopulates the dropdown; assigned when the
+    // dropdown is built and reused by the Refresh button below.
+    let load = async (): Promise<void> => {};
+
+    const setting = new Setting(containerEl)
       .setName(name)
       .setDesc(desc)
       .addDropdown((dropdown) => {
-        const current = getValue();
-
         const rebuild = (models: string[], placeholder?: string): void => {
+          // Read the saved value fresh each time so a manual refresh preserves
+          // the current selection even after the user changed it.
+          const current = getValue();
           dropdown.selectEl.empty();
           const list = [...new Set([current, ...models])].filter((m) => m.length > 0);
           if (list.length === 0) {
@@ -301,14 +546,27 @@ export class SettingsTab extends PluginSettingTab {
           }
         };
 
-        rebuild([], "Loading models…");
         dropdown.onChange(async (value) => {
           setValue(value);
           await this.host.saveSettings();
         });
-        void fetcher()
-          .then((models) => rebuild(models))
-          .catch(() => rebuild([], "Server unreachable — is it running?"));
+
+        load = async (): Promise<void> => {
+          rebuild([], "Loading models…");
+          try {
+            rebuild(await fetcher());
+          } catch {
+            rebuild([], "Server unreachable — is it running?");
+          }
+        };
+        void load();
       });
+
+    setting.addButton((button) =>
+      button
+        .setButtonText("Refresh")
+        .setTooltip("Re-query the server for its current models")
+        .onClick(() => void load()),
+    );
   }
 }

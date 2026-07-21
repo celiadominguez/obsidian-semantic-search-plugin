@@ -224,6 +224,23 @@ function configureLocalModel(
   };
 }
 
+/** A `fetch`-compatible function transformers.js uses to download model files. */
+export type FetchLike = (input: unknown, init?: unknown) => Promise<Response>;
+
+/**
+ * Override the function transformers.js uses to download model files
+ * (`env.fetch`). In Obsidian's renderer the default global `fetch` to
+ * huggingface.co is blocked by CSP/CORS; the injected implementation routes the
+ * request through Obsidian's `requestUrl` instead. No-op under Node (the eval),
+ * where the default fetch works and no override is supplied.
+ */
+function configureFetch(transformers: unknown, fetchImpl: FetchLike): void {
+  const env = (transformers as { env?: { fetch?: FetchLike } }).env;
+  if (env !== undefined) {
+    env.fetch = fetchImpl;
+  }
+}
+
 /** Default quantization: int8, keeping the bge-small model around 33 MB. */
 const DEFAULT_DTYPE: Dtype = "q8";
 
@@ -245,6 +262,12 @@ interface TransformersEmbedderOptions {
    * fully-offline path. Omitted for the default download-and-cache behaviour.
    */
   readLocalModelFile?: LocalModelReader;
+  /**
+   * Overrides the fetch transformers.js uses to download model files. In
+   * Obsidian's renderer this must route through `requestUrl` to avoid the
+   * CSP/CORS block on direct fetches to huggingface.co. Omitted under Node.
+   */
+  fetchImpl?: FetchLike;
 }
 
 // Minimal structural type for the transformers.js feature-extraction pipeline,
@@ -266,6 +289,7 @@ export class TransformersEmbedder implements Embedder {
   private readonly dtype: Dtype;
   private readonly getWasmBinary?: () => Promise<ArrayBuffer | undefined>;
   private readonly readLocalModelFile?: LocalModelReader;
+  private readonly fetchImpl?: FetchLike;
   private pipelinePromise: Promise<FeatureExtractionPipeline> | null = null;
 
   constructor(options: TransformersEmbedderOptions) {
@@ -275,6 +299,7 @@ export class TransformersEmbedder implements Embedder {
     this.dtype = options.dtype ?? DEFAULT_DTYPE;
     this.getWasmBinary = options.getWasmBinary;
     this.readLocalModelFile = options.readLocalModelFile;
+    this.fetchImpl = options.fetchImpl;
   }
 
   /** Lazily construct (and cache) the feature-extraction pipeline. */
@@ -289,6 +314,9 @@ export class TransformersEmbedder implements Embedder {
     const transformers = await importTransformers();
     const wasmBinary = this.getWasmBinary ? await this.getWasmBinary() : undefined;
     configureOnnxRuntime(transformers, wasmBinary);
+    if (this.fetchImpl !== undefined) {
+      configureFetch(transformers, this.fetchImpl);
+    }
     if (this.readLocalModelFile !== undefined) {
       configureLocalModel(transformers, this.readLocalModelFile, this.modelId);
     }

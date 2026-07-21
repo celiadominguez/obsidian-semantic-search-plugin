@@ -30,6 +30,8 @@ export class VaultSleuthView extends ItemView {
   private chatEngine: ChatEngine | null = null;
   /** Per-mode input drafts, so a search query never carries over into chat. */
   private readonly drafts: Record<ViewMode, string> = { search: "", chat: "" };
+  /** Guards against a stale backend-readiness probe surfacing after a mode/settings change. */
+  private readinessCheckSeq = 0;
 
   private searchTab!: HTMLElement;
   private chatTab!: HTMLElement;
@@ -61,7 +63,7 @@ export class VaultSleuthView extends ItemView {
   }
 
   public getIcon(): string {
-    return "brain-circuit";
+    return "settings";
   }
 
   public async onOpen(): Promise<void> {
@@ -128,9 +130,13 @@ export class VaultSleuthView extends ItemView {
 
   /** Switch the active mode, swapping in that mode's own input draft. */
   public setMode(mode: ViewMode): void {
-    // Chat needs a model; without one, fall back to search.
+    // Chat needs a model; without one, fall back to search and say why (this
+    // branch only fires on an explicit request to enter chat, e.g. the command).
     if (mode === "chat" && !this.chatAvailable()) {
       mode = "search";
+      new Notice(
+        "Chat needs a model — set a local (Ollama / LM Studio) or hosted one in settings.",
+      );
     }
     // Cancel any pending search so it can't fire against the other mode's input.
     if (this.debounceTimer !== null) {
@@ -162,6 +168,31 @@ export class VaultSleuthView extends ItemView {
       this.renderChatEmpty();
     }
     this.inputEl.focus();
+    if (mode === "chat") {
+      this.notifyIfBackendNotReady();
+    }
+  }
+
+  /**
+   * Proactively probe the chat backend and, if it can't answer (local server not
+   * running, or the configured model isn't loaded), surface a Notice — so the
+   * user learns before typing a question, not only after a failed send.
+   *
+   * Fire-and-forget: a slow or unreachable server never blocks the UI, and a
+   * sequence token drops any result that arrives after the user has switched
+   * mode or changed settings.
+   */
+  private notifyIfBackendNotReady(): void {
+    if (!this.chatAvailable()) {
+      return;
+    }
+    const token = ++this.readinessCheckSeq;
+    void this.index.checkGenerationReadiness().then((status) => {
+      if (status.ok || token !== this.readinessCheckSeq || this.mode !== "chat") {
+        return;
+      }
+      new Notice(`Chat may not respond — ${status.reason}`, 8000);
+    });
   }
 
   /**
@@ -173,6 +204,10 @@ export class VaultSleuthView extends ItemView {
   public onSettingsChanged(): void {
     this.chatEngine = null;
     this.updateChatChrome();
+    // The backend/model may have just changed; re-probe if chat is on screen.
+    if (this.mode === "chat") {
+      this.notifyIfBackendNotReady();
+    }
   }
 
   /**

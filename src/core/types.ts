@@ -10,6 +10,19 @@ export type EmbeddingModelId = "Xenova/bge-small-en-v1.5" | "Xenova/all-MiniLM-L
 /** Chat generation backend selector. */
 export type GenerationBackend = "none" | "ollama" | "lmstudio" | "hosted";
 
+/**
+ * Where embeddings are computed. `on-device` (default) runs the bundled
+ * transformers.js model locally; `remote` delegates to an embeddings server.
+ */
+export type EmbeddingSource = "on-device" | "remote";
+
+/**
+ * Wire format of a remote embeddings server. `openai` covers LM Studio and any
+ * OpenAI-compatible service (TEI, Infinity, hosted APIs); `ollama` covers
+ * Ollama's native batch endpoint.
+ */
+export type RemoteEmbeddingProtocol = "openai" | "ollama";
+
 /** Persisted, user-facing configuration. Every key has a default (see config.ts). */
 export interface VaultSleuthSettings {
   embeddingModel: EmbeddingModelId;
@@ -19,6 +32,32 @@ export interface VaultSleuthSettings {
    * downloaded — an opt-in, fully-offline path. Empty means download once.
    */
   localModelPath: string;
+  /**
+   * Where embeddings are computed. Defaults to `on-device`; `remote` is opt-in
+   * and sends note text to the configured embeddings server.
+   */
+  embeddingSource: EmbeddingSource;
+  /** Wire format of the remote embeddings server (used when source is `remote`). */
+  remoteEmbeddingProtocol: RemoteEmbeddingProtocol;
+  /** Base URL of the remote embeddings server, e.g. `http://localhost:1234/v1`. */
+  remoteEmbeddingEndpoint: string;
+  /** Model name the remote server should embed with. */
+  remoteEmbeddingModel: string;
+  /**
+   * Vector dimensionality the remote model returns. It must match what the
+   * server actually produces; the settings tab can detect it, and a mismatch is
+   * reported at index time rather than silently corrupting the index.
+   */
+  remoteEmbeddingDim: number;
+  /** Optional bearer token; only sent to the remote embeddings endpoint. */
+  remoteEmbeddingApiKey: string;
+  /**
+   * Optional instruction prepended to the QUERY (not passages) before embedding,
+   * for asymmetric retrievers like the BGE family (e.g. "Represent this sentence
+   * for searching relevant passages: "). Empty for symmetric models. Only affects
+   * query embedding, so changing it does not require a re-index.
+   */
+  remoteEmbeddingQueryInstruction: string;
   chunkTokens: number;
   chunkOverlap: number;
   hybridAlpha: number;

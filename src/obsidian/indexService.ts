@@ -13,20 +13,28 @@
  */
 
 import { normalizePath, type App, type TFile } from "obsidian";
-import { EMBED_BATCH_SIZE } from "../core/config";
+import { EMBED_BATCH_SIZE, QA_SIMILARITY_FLOOR } from "../core/config";
+import { RemoteEmbedder } from "../core/remoteEmbedder";
 import { chunkNote } from "../core/chunker";
 import { embedInput, lexicalInput } from "../core/indexSurface";
 import { hashText } from "../core/hash";
 import { rank } from "../core/hybridRanker";
 import { TransformersEmbedder } from "../core/embedder";
-import { createGenerator } from "../core/generation";
+import { createGenerator, listOllamaModels, listOpenAiModels } from "../core/generation";
 import { ChatEngine } from "../core/chat";
 import { Bm25Index } from "../core/bm25";
 import { obsidianHttpClient } from "./obsidianHttp";
+import { obsidianFetch } from "./obsidianFetch";
 import { ortWasmBinary } from "./ortWasm";
 import { SIDECAR_VERSION, VectorStore, type VectorSidecar } from "../core/vectorStore";
 import { EMBEDDING_MODELS, type EmbeddingModelInfo } from "../core/config";
-import type { NoteInput, RankingMode, SearchResult, VaultSleuthSettings } from "../core/types";
+import type {
+  Embedder,
+  NoteInput,
+  RankingMode,
+  SearchResult,
+  VaultSleuthSettings,
+} from "../core/types";
 
 const VECTOR_BLOB_FILE = "index.bin";
 const SIDECAR_FILE = "index.json";
@@ -42,11 +50,18 @@ export interface IndexStats {
   usesHnsw: boolean;
 }
 
+/** Outcome of probing whether the configured chat backend can actually answer. */
+export interface GenerationReadiness {
+  ok: boolean;
+  /** Present only when `ok` is false: a user-facing explanation of what to fix. */
+  reason?: string;
+}
+
 export class IndexService {
   private readonly app: App;
   private settings: VaultSleuthSettings;
   private readonly pluginDir: string;
-  private embedder: TransformersEmbedder;
+  private embedder: Embedder;
   private store: VectorStore;
   private bm25 = new Bm25Index();
   private indexedNotes = new Set<string>();
@@ -64,10 +79,27 @@ export class IndexService {
   }
 
   private modelDim(): number {
+    if (this.settings.embeddingSource === "remote") {
+      return this.settings.remoteEmbeddingDim;
+    }
     return EMBEDDING_MODELS[this.settings.embeddingModel].dim;
   }
 
-  private createEmbedder(): TransformersEmbedder {
+  /**
+   * Build the configured embedder: the bundled on-device model by default, or a
+   * remote embeddings server when the user opts in.
+   */
+  private createEmbedder(): Embedder {
+    if (this.settings.embeddingSource === "remote") {
+      return new RemoteEmbedder({
+        protocol: this.settings.remoteEmbeddingProtocol,
+        endpoint: this.settings.remoteEmbeddingEndpoint,
+        model: this.settings.remoteEmbeddingModel,
+        dim: this.settings.remoteEmbeddingDim,
+        apiKey: this.settings.remoteEmbeddingApiKey,
+        http: obsidianHttpClient,
+      });
+    }
     const localModelPath = this.settings.localModelPath.trim();
     return new TransformersEmbedder({
       modelId: this.settings.embeddingModel,
@@ -76,6 +108,9 @@ export class IndexService {
       // The ORT WASM engine is inlined into main.js (see ortWasm.ts); handing the
       // bytes to the embedder keeps onnxruntime-web from fetching it from a CDN.
       getWasmBinary: () => Promise.resolve(ortWasmBinary()),
+      // Download model files via requestUrl — a direct fetch to huggingface.co
+      // from the renderer is blocked by Obsidian's CSP/CORS.
+      fetchImpl: obsidianFetch,
       // Opt-in fully-offline path: load model files from a vault folder instead
       // of downloading them. Only wired up when the user configured a folder.
       readLocalModelFile:
@@ -108,17 +143,38 @@ export class IndexService {
   private createStore(): VectorStore {
     return new VectorStore({
       dim: this.modelDim(),
-      modelId: this.settings.embeddingModel,
+      // Use the embedder's own id so a remote server/model swap is recorded in
+      // the sidecar and invalidates the persisted vectors just like a local one.
+      modelId: this.embedder.modelId,
       hnswThreshold: this.settings.hnswThreshold,
     });
   }
 
+  /**
+   * Identity of the vectors a settings object produces. Any change here means
+   * the persisted embeddings are no longer comparable and must be rebuilt.
+   */
+  private static vectorIdentity(s: VaultSleuthSettings): string {
+    return s.embeddingSource === "remote"
+      ? [
+          "remote",
+          s.remoteEmbeddingProtocol,
+          s.remoteEmbeddingEndpoint,
+          s.remoteEmbeddingModel,
+          s.remoteEmbeddingDim,
+        ].join(":")
+      : `on-device:${s.embeddingModel}`;
+  }
+
   /** Apply updated settings; a model change requires a full re-index by the caller. */
   public updateSettings(settings: VaultSleuthSettings): void {
-    const modelChanged = settings.embeddingModel !== this.settings.embeddingModel;
-    // Switching the model source (download ⇄ local folder) produces the same
-    // vectors, so it only needs a fresh embedder, not a re-index.
-    const sourceChanged = settings.localModelPath !== this.settings.localModelPath;
+    const modelChanged =
+      IndexService.vectorIdentity(settings) !== IndexService.vectorIdentity(this.settings);
+    // Switching the model source (download ⇄ local folder) or the remote API key
+    // produces the same vectors, so it only needs a fresh embedder, not a re-index.
+    const sourceChanged =
+      settings.localModelPath !== this.settings.localModelPath ||
+      settings.remoteEmbeddingApiKey !== this.settings.remoteEmbeddingApiKey;
     this.settings = settings;
     if (modelChanged || sourceChanged) {
       this.embedder = this.createEmbedder();
@@ -175,7 +231,7 @@ export class IndexService {
       // schema version — any mismatch means the vectors can't be trusted, so we
       // fall through to a fresh re-index rather than load stale/incompatible data.
       if (
-        sidecar.meta.modelId !== this.settings.embeddingModel ||
+        sidecar.meta.modelId !== this.embedder.modelId ||
         sidecar.meta.dim !== this.modelDim() ||
         sidecar.meta.version !== SIDECAR_VERSION
       ) {
@@ -287,9 +343,29 @@ export class IndexService {
     indexed.delete(path);
   }
 
+  /**
+   * Fail fast with an actionable message when the remote embedding source is
+   * selected but not fully configured, instead of surfacing a confusing
+   * dimension mismatch from deep inside an indexing run.
+   */
+  private assertEmbedderConfigured(): void {
+    if (this.settings.embeddingSource !== "remote") {
+      return;
+    }
+    if (this.settings.remoteEmbeddingModel.length === 0) {
+      throw new Error("No remote embedding model selected — choose one in settings.");
+    }
+    if (this.settings.remoteEmbeddingDim <= 0) {
+      throw new Error(
+        "Remote embedding dimension is not set — use Detect in settings to read it from the server.",
+      );
+    }
+  }
+
   /** Incrementally index a batch of changed files, then persist (serialized). */
   public indexFiles(files: TFile[]): Promise<void> {
     return this.runExclusive(async () => {
+      this.assertEmbedderConfigured();
       for (const file of files) {
         if (this.isExcluded(file.path)) {
           continue;
@@ -336,6 +412,7 @@ export class IndexService {
    */
   public reindexAll(onProgress?: ProgressCallback): Promise<void> {
     return this.runExclusive(async () => {
+      this.assertEmbedderConfigured();
       const store = this.createStore();
       const bm25 = new Bm25Index();
       const indexed = new Set<string>();
@@ -351,8 +428,23 @@ export class IndexService {
     });
   }
 
-  /** Per-model retrieval configuration (query instruction + refusal floor). */
+  /**
+   * Per-model retrieval configuration (query instruction + refusal floor).
+   *
+   * A remote model is arbitrary, so it uses the shared conservative refusal floor
+   * and the user-supplied query instruction (empty unless they set one for an
+   * asymmetric retriever like BGE).
+   */
   private modelInfo(): EmbeddingModelInfo {
+    if (this.settings.embeddingSource === "remote") {
+      return {
+        dim: this.settings.remoteEmbeddingDim,
+        label: this.settings.remoteEmbeddingModel,
+        queryInstruction: this.settings.remoteEmbeddingQueryInstruction,
+        similarityFloor: QA_SIMILARITY_FLOOR,
+        revision: "",
+      };
+    }
     return EMBEDDING_MODELS[this.settings.embeddingModel];
   }
 
@@ -402,6 +494,57 @@ export class IndexService {
     }
   }
 
+  /**
+   * Probe whether the configured local generation backend is actually ready to
+   * answer: reachable and serving the selected model. Only local servers (Ollama
+   * / LM Studio) are probed — the check reuses their model-listing endpoints. The
+   * `hosted` and `none` backends return ready without a network call, since we
+   * never contact a hosted endpoint except to answer a real question.
+   */
+  public async checkGenerationReadiness(): Promise<GenerationReadiness> {
+    const s = this.settings;
+    const probe = async (
+      label: string,
+      endpoint: string,
+      model: string,
+      list: () => Promise<string[]>,
+    ): Promise<GenerationReadiness> => {
+      if (model.length === 0) {
+        return {
+          ok: false,
+          reason: `no ${label} model is set — choose a loaded model in settings.`,
+        };
+      }
+      let models: string[];
+      try {
+        models = await list();
+      } catch {
+        return {
+          ok: false,
+          reason: `${label} isn't reachable at ${endpoint} — start its local server, then try again.`,
+        };
+      }
+      if (!models.includes(model)) {
+        const loaded = models.length > 0 ? ` Loaded now: ${models.join(", ")}.` : "";
+        return { ok: false, reason: `${label} model "${model}" isn't loaded.${loaded}` };
+      }
+      return { ok: true };
+    };
+
+    switch (s.generationBackend) {
+      case "ollama":
+        return probe("Ollama", s.ollamaEndpoint, s.ollamaModel, () =>
+          listOllamaModels(s.ollamaEndpoint, obsidianHttpClient),
+        );
+      case "lmstudio":
+        return probe("LM Studio", s.lmstudioEndpoint, s.lmstudioModel, () =>
+          listOpenAiModels(s.lmstudioEndpoint, undefined, obsidianHttpClient),
+        );
+      default:
+        return { ok: true };
+    }
+  }
+
   /** Human-readable summary of the active answer model, for the chat header. */
   public get generationSummary(): string {
     const s = this.settings;
@@ -423,7 +566,7 @@ export class IndexService {
     return {
       notes: this.indexedNotes.size,
       chunks: this.store.size,
-      modelId: this.settings.embeddingModel,
+      modelId: this.embedder.modelId,
       usesHnsw: this.store.usesHnsw,
     };
   }

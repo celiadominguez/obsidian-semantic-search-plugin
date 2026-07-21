@@ -128,6 +128,14 @@ export function defaultSettings(): VaultSleuthSettings {
   return {
     embeddingModel: DEFAULT_EMBEDDING_MODEL,
     localModelPath: "",
+    // Embeddings run on-device by default; the remote path is strictly opt-in.
+    embeddingSource: "on-device",
+    remoteEmbeddingProtocol: "openai",
+    remoteEmbeddingEndpoint: DEFAULT_LMSTUDIO_ENDPOINT,
+    remoteEmbeddingModel: "",
+    remoteEmbeddingDim: 0,
+    remoteEmbeddingApiKey: "",
+    remoteEmbeddingQueryInstruction: "",
     chunkTokens: DEFAULT_CHUNK_TOKENS,
     chunkOverlap: DEFAULT_CHUNK_OVERLAP,
     hybridAlpha: DEFAULT_HYBRID_ALPHA,

@@ -149,19 +149,73 @@ best matches.
 ## Configuration
 
 Every setting has a default, so a fresh install runs fully offline with no setup.
+The settings tab is grouped by how often you'd touch a setting: **Search &
+indexing** first, then **Chat**, then **Advanced (tuning)**, then **Maintenance**.
 
-| Setting                                           | Default                                  | Purpose                                                    |
-| ------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------- |
-| `embeddingModel`                                  | `Xenova/bge-small-en-v1.5`               | On-device embedding model (also `Xenova/all-MiniLM-L6-v2`) |
-| `chunkTokens` / `chunkOverlap`                    | `512` / `64`                             | Chunk size and overlap (approx. tokens)                    |
-| `hybridAlpha`                                     | `0.6`                                    | Semantic vs lexical blend (1.0 = semantic only)            |
-| `hnswThreshold`                                   | `20000`                                  | Chunk count above which HNSW replaces exact cosine         |
-| `generationBackend`                               | `none`                                   | `none` \| `ollama` \| `lmstudio` \| `hosted`               |
-| `ollamaEndpoint` / `ollamaModel`                  | `http://localhost:11434` / `llama3.1:8b` | Local generation (Ollama)                                  |
-| `lmstudioEndpoint` / `lmstudioModel`              | `http://localhost:1234/v1` / _(picked)_  | Local generation (LM Studio, OpenAI-compatible)            |
-| `hostedEndpoint` / `hostedModel` / `hostedApiKey` | empty                                    | Opt-in hosted generation only                              |
-| `localModelPath`                                  | empty                                    | Advanced: load the model from a vault folder (offline)     |
-| `excludedFolders`                                 | `[]`                                     | Vault folders to skip when indexing                        |
+### Search & indexing
+
+Where embeddings come from, and what gets indexed.
+
+| Setting           | Default                    | Purpose                                                                           |
+| ----------------- | -------------------------- | --------------------------------------------------------------------------------- |
+| `embeddingSource` | `on-device`                | `on-device` (bundled model, local) or `remote` (an embeddings server — opt-in)    |
+| `embeddingModel`  | `Xenova/bge-small-en-v1.5` | On-device model (also `Xenova/all-MiniLM-L6-v2`). Used when source is `on-device` |
+| `localModelPath`  | empty                      | Advanced: load the on-device model from a vault folder (see below)                |
+| `excludedFolders` | `[]`                       | Vault folders to skip when indexing                                               |
+
+When `embeddingSource` is `remote`, these apply instead of `embeddingModel` (see
+[Remote embeddings](#advanced-remote-embeddings-server)):
+
+| Setting                           | Default                    | Purpose                                                                                            |
+| --------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------- |
+| `remoteEmbeddingProtocol`         | `openai`                   | `openai` (LM Studio / TEI / Infinity / hosted, `POST /embeddings`) or `ollama` (`POST /api/embed`) |
+| `remoteEmbeddingEndpoint`         | `http://localhost:1234/v1` | Base URL of the embeddings server                                                                  |
+| `remoteEmbeddingModel`            | empty                      | Model the server should embed with (picked from what it reports)                                   |
+| `remoteEmbeddingDim`              | `0`                        | Vector dimension the model returns — **Detect** reads it from the server                           |
+| `remoteEmbeddingApiKey`           | empty                      | Optional bearer token, sent only to the endpoint above                                             |
+| `remoteEmbeddingQueryInstruction` | empty                      | Optional query prefix for asymmetric models (e.g. BGE); applied to queries only                    |
+
+### Chat (answer generation)
+
+| Setting                                           | Default                                  | Purpose                                                |
+| ------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------ |
+| `generationBackend`                               | `none`                                   | `none` (offline) \| `ollama` \| `lmstudio` \| `hosted` |
+| `ollamaEndpoint` / `ollamaModel`                  | `http://localhost:11434` / `llama3.1:8b` | Local generation (Ollama)                              |
+| `lmstudioEndpoint` / `lmstudioModel`              | `http://localhost:1234/v1` / _(picked)_  | Local generation (LM Studio, OpenAI-compatible)        |
+| `hostedEndpoint` / `hostedModel` / `hostedApiKey` | empty                                    | Opt-in hosted generation only                          |
+
+### Advanced (tuning)
+
+| Setting                        | Default      | Purpose                                            |
+| ------------------------------ | ------------ | -------------------------------------------------- |
+| `chunkTokens` / `chunkOverlap` | `512` / `64` | Chunk size and overlap (approx. tokens)            |
+| `hybridAlpha`                  | `0.6`        | Semantic vs lexical blend (1.0 = semantic only)    |
+| `hnswThreshold`                | `20000`      | Chunk count above which HNSW replaces exact cosine |
+
+### Maintenance
+
+**Index status** shows the current note / chunk counts, and **Rebuild index**
+re-embeds the whole vault from scratch — use it after changing chunking or
+embedding settings, or if results look stale. (Everyday edits re-index
+automatically; you rarely need this.)
+
+### Advanced: remote embeddings server
+
+Instead of the bundled on-device model, you can have an external server compute
+embeddings. Set **Embedding source → Remote server**, then:
+
+1. Pick the **Server type** — _OpenAI-compatible_ (LM Studio, Text Embeddings
+   Inference, Infinity, or a hosted API) or _Ollama_.
+2. Set the **endpoint**, then pick an **embedding model** the server reports.
+3. Click **Detect** to read the model's **vector dimension** from the server.
+4. Add an **API key** if the server needs one, and a **query instruction** if the
+   model is asymmetric (e.g. the BGE family).
+5. **Rebuild index** so the vectors are regenerated by the new model.
+
+> Privacy: pointed at localhost (Ollama / LM Studio) nothing leaves your machine;
+> pointed at a hosted API your note text is sent there — the setting says so
+> explicitly. Changing the server, protocol, model, or dimension invalidates the
+> stored vectors and requires a rebuild.
 
 ### Advanced: fully offline (local model)
 
@@ -182,7 +236,7 @@ the plugin at them — nothing is then downloaded.
    ```
 
 3. Set **Local model folder** in settings to that folder (`models` above), then
-   run **Re-index vault**. The model now loads from disk with no network access.
+   **Rebuild index**. The model now loads from disk with no network access.
 
 > Experimental: model loading is verified against the default layout above; if
 > embedding fails after setting it, clear the field to fall back to the download.

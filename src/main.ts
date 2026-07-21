@@ -12,7 +12,7 @@
 import { Notice, Plugin, TFile, type WorkspaceLeaf } from "obsidian";
 import { INDEX_DEBOUNCE_MS, defaultSettings } from "./core/config";
 import type { VaultSleuthSettings } from "./core/types";
-import { IndexService } from "./obsidian/indexService";
+import { IndexService, type IndexStats } from "./obsidian/indexService";
 import { VaultSleuthView, VAULTSLEUTH_VIEW_TYPE, type ViewMode } from "./obsidian/VaultSleuthView";
 import { SettingsTab, type SettingsHost } from "./obsidian/SettingsTab";
 
@@ -36,7 +36,7 @@ export default class VaultSleuthPlugin extends Plugin implements SettingsHost {
     this.registerView(VAULTSLEUTH_VIEW_TYPE, (leaf) => new VaultSleuthView(leaf, this.index));
 
     this.addRibbonIcon(
-      "brain-circuit",
+      "settings",
       "VaultSleuth: search & chat",
       () => void this.activateView("search"),
     );
@@ -206,6 +206,11 @@ export default class VaultSleuthPlugin extends Plugin implements SettingsHost {
     }
     this.setStatus(`indexed (${chunks} chunks)`);
     new Notice(`Indexed ${notes} notes (${chunks} chunks)`);
+  }
+
+  /** Current index statistics, for the settings tab's status readout. */
+  public indexStats(): IndexStats {
+    return this.index.stats();
   }
 
   private setStatus(text: string): void {
