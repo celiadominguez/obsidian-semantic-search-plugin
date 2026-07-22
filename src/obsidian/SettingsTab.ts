@@ -340,7 +340,9 @@ export class SettingsTab extends PluginSettingTab {
       .setDesc(
         "Notes are indexed automatically as you create, edit, rename, or delete them. " +
           "Use this to rebuild the whole index and embeddings from scratch — e.g. after " +
-          "changing chunking or embedding settings, or if search results look stale.",
+          "changing chunking or embedding settings, or if search results look stale. " +
+          "You can close this window; indexing continues in the background (progress shows " +
+          "in the status bar).",
       )
       .addButton((button) => {
         button

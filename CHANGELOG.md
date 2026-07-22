@@ -4,6 +4,20 @@ All notable changes to VaultSleuth are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-07-22
+
+### Fixed
+
+- Keep the UI responsive during a full index rebuild. On-device embedding runs on
+  the main thread, so a large rebuild could make the app (including closing the
+  settings window) feel frozen. The indexing loops now yield to the event loop on
+  a time slice so the interface keeps painting and accepting input.
+
+### Changed
+
+- Clarified in settings that you can close the window during a rebuild — indexing
+  continues in the background, with progress in the status bar.
+
 ## [1.2.0] - 2026-07-21
 
 ### Added
@@ -57,6 +71,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Initial release: on-device semantic + hybrid (BM25) search over an Obsidian
   vault.
 
+[1.2.1]: https://github.com/celiadominguez/obsidian-semantic-search-plugin/releases/tag/1.2.1
 [1.2.0]: https://github.com/celiadominguez/obsidian-semantic-search-plugin/releases/tag/1.2.0
 [1.1.1]: https://github.com/celiadominguez/obsidian-semantic-search-plugin/releases/tag/1.1.1
 [1.1.0]: https://github.com/celiadominguez/obsidian-semantic-search-plugin/releases/tag/1.1.0

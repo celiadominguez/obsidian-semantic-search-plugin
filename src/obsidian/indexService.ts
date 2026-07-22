@@ -39,6 +39,12 @@ import type {
 const VECTOR_BLOB_FILE = "index.bin";
 const SIDECAR_FILE = "index.json";
 
+// On-device embedding is CPU-bound and runs on the main thread. To keep the UI
+// responsive during a long index (so the app can paint and accept input, e.g.
+// closing the settings window), the indexing loops hand the event loop a turn
+// whenever more than this many milliseconds of work have elapsed since the last.
+const UI_YIELD_INTERVAL_MS = 50;
+
 /** Progress callback fired during a full (re)index. */
 export type ProgressCallback = (done: number, total: number) => void;
 
@@ -362,10 +368,28 @@ export class IndexService {
     }
   }
 
+  /**
+   * A cooperative yielder for the hot indexing loops. Call the returned function
+   * after each note; it hands the event loop a turn (via a macrotask, which — unlike
+   * a microtask — lets the browser paint and process input) whenever more than
+   * {@link UI_YIELD_INTERVAL_MS} of synchronous work has elapsed. Time-sliced so the
+   * added overhead stays negligible regardless of vault size.
+   */
+  private static makeUiYielder(): () => Promise<void> {
+    let last = performance.now();
+    return async () => {
+      if (performance.now() - last > UI_YIELD_INTERVAL_MS) {
+        await new Promise<void>((resolve) => setTimeout(resolve));
+        last = performance.now();
+      }
+    };
+  }
+
   /** Incrementally index a batch of changed files, then persist (serialized). */
   public indexFiles(files: TFile[]): Promise<void> {
     return this.runExclusive(async () => {
       this.assertEmbedderConfigured();
+      const yieldToUi = IndexService.makeUiYielder();
       for (const file of files) {
         if (this.isExcluded(file.path)) {
           continue;
@@ -376,6 +400,7 @@ export class IndexService {
           this.bm25,
           this.indexedNotes,
         );
+        await yieldToUi();
       }
       await this.persistIndex();
     });
@@ -417,9 +442,11 @@ export class IndexService {
       const bm25 = new Bm25Index();
       const indexed = new Set<string>();
       const files = this.indexableFiles();
+      const yieldToUi = IndexService.makeUiYielder();
       for (let i = 0; i < files.length; i++) {
         await this.indexNoteInto(await this.toNoteInput(files[i]), store, bm25, indexed);
         onProgress?.(i + 1, files.length);
+        await yieldToUi();
       }
       this.store = store;
       this.bm25 = bm25;
