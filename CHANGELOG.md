@@ -4,6 +4,21 @@ All notable changes to VaultSleuth are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-07-28
+
+### Changed
+
+- Updated transitive dependencies (`protobufjs`, `postcss`, `js-yaml`) to patched
+  versions to clear security advisories. Remaining advisories (`sharp`, `adm-zip`)
+  are in optional native backends that the plugin never invokes and that are not
+  included in the shipped `main.js`.
+
+### Security / build
+
+- The release workflow now generates GitHub build-provenance attestations for
+  `main.js` and `styles.css`, so users can cryptographically verify the assets
+  were built from this repository.
+
 ## [1.2.1] - 2026-07-22
 
 ### Fixed
@@ -71,6 +86,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Initial release: on-device semantic + hybrid (BM25) search over an Obsidian
   vault.
 
+[1.2.2]: https://github.com/celiadominguez/obsidian-semantic-search-plugin/releases/tag/1.2.2
 [1.2.1]: https://github.com/celiadominguez/obsidian-semantic-search-plugin/releases/tag/1.2.1
 [1.2.0]: https://github.com/celiadominguez/obsidian-semantic-search-plugin/releases/tag/1.2.0
 [1.1.1]: https://github.com/celiadominguez/obsidian-semantic-search-plugin/releases/tag/1.1.1
