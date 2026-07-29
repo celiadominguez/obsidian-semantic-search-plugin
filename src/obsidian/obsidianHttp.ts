@@ -21,7 +21,8 @@ export const obsidianHttpClient: HttpClient = async (url, init) => {
   return {
     ok: response.status >= 200 && response.status < 300,
     status: response.status,
-    // `requestUrl` exposes the parsed body as a property, not a method.
-    json: async () => response.json,
+    // `requestUrl` exposes the parsed body as a property, not a method. It is
+    // typed `any`, so surface it as `unknown` for callers to narrow.
+    json: async (): Promise<unknown> => response.json as unknown,
   };
 };

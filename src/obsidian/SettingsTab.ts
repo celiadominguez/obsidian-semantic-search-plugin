@@ -300,7 +300,6 @@ export class SettingsTab extends PluginSettingTab {
         slider
           .setLimits(0, 1, 0.05)
           .setValue(settings.hybridAlpha)
-          .setDynamicTooltip()
           .onChange(async (value) => {
             settings.hybridAlpha = value;
             await this.host.saveSettings();

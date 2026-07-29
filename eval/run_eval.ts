@@ -11,6 +11,9 @@
  * reusable scoring logic lives in `evaluate.ts`; this file is just I/O + the CLI.
  */
 
+/* eslint-disable no-console -- this is a command-line reporter, not plugin code;
+   its console output is the intended interface and never ships in the plugin. */
+
 import { readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { TransformersEmbedder } from "../src/core/embedder";

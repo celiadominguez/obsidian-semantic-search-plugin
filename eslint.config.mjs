@@ -30,11 +30,30 @@ export default tseslint.config(
     },
   },
   {
-    // Eval and scripts run outside the plugin sandbox; console output is their
-    // intended interface, so logging there is expected, not a smell.
-    files: ["eval/**/*.ts", "scripts/**/*.ts"],
+    // Provenance scripts run outside the plugin sandbox; console output is their
+    // intended interface, so logging there is expected, not a smell. The eval CLI
+    // opts in per-file with an inline directive instead, so the community reviewer
+    // (which uses its own lint config) also sees the intent.
+    files: ["scripts/**/*.ts"],
     rules: {
       "no-console": "off",
+    },
+  },
+  {
+    // Type-aware rules for the shipped plugin source, matching the checks the
+    // Obsidian community-plugin reviewer runs so regressions are caught locally.
+    files: ["src/**/*.ts"],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      "@typescript-eslint/no-unsafe-assignment": "error",
+      "@typescript-eslint/no-unsafe-return": "error",
+      "@typescript-eslint/no-misused-promises": "error",
+      "@typescript-eslint/no-unnecessary-type-assertion": "error",
     },
   },
   {

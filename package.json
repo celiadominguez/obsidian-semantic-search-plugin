@@ -1,6 +1,6 @@
 {
   "name": "vaultsleuth",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Search your vault by meaning and chat with answers cited back to your notes. Embedding and retrieval run fully on-device, so no data leaves your machine by default.",
   "type": "module",
   "license": "MIT",

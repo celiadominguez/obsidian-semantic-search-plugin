@@ -4,6 +4,18 @@ All notable changes to VaultSleuth are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.3] - 2026-07-29
+
+### Changed
+
+- Addressed community-review source-code findings: use `window.setTimeout`, route
+  the non-Obsidian HTTP fallback through `globalThis.fetch`, remove redundant type
+  assertions, tighten types so no `any` values are assigned or returned, and stop
+  passing async callbacks where a void return is expected. Dropped the deprecated
+  `setDynamicTooltip()` call.
+- The lint config now runs the same type-checked rules the community reviewer
+  uses, so these regressions are caught locally.
+
 ## [1.2.2] - 2026-07-28
 
 ### Changed
@@ -86,6 +98,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Initial release: on-device semantic + hybrid (BM25) search over an Obsidian
   vault.
 
+[1.2.3]: https://github.com/celiadominguez/obsidian-semantic-search-plugin/releases/tag/1.2.3
 [1.2.2]: https://github.com/celiadominguez/obsidian-semantic-search-plugin/releases/tag/1.2.2
 [1.2.1]: https://github.com/celiadominguez/obsidian-semantic-search-plugin/releases/tag/1.2.1
 [1.2.0]: https://github.com/celiadominguez/obsidian-semantic-search-plugin/releases/tag/1.2.0

@@ -325,7 +325,7 @@ export class TransformersEmbedder implements Embedder {
       device: nonGpuDevice(),
       revision: this.revision,
     });
-    return pipe as unknown as FeatureExtractionPipeline;
+    return pipe;
   }
 
   public async embed(texts: string[]): Promise<Float32Array[]> {

@@ -24,7 +24,7 @@ export async function obsidianFetch(input: unknown, init?: unknown): Promise<Res
 
   const headers: Record<string, string> = {};
   if (opts.headers !== undefined) {
-    new Headers(opts.headers as HeadersInit).forEach((value, key) => {
+    new Headers(opts.headers).forEach((value, key) => {
       headers[key] = value;
     });
   }

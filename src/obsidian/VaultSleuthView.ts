@@ -344,9 +344,17 @@ export class VaultSleuthView extends ItemView {
     card.createDiv({ cls: "vaultsleuth-result-snippet", text: result.snippet });
 
     const actions = card.createDiv({ cls: "vaultsleuth-result-actions" });
-    this.addResultAction(actions, "Open in split", () => this.openInSplit(result.chunk.notePath));
-    this.addResultAction(actions, "Insert link", () => this.insertLink(result.chunk.notePath));
-    this.addResultAction(actions, "Copy citation", () => this.copyCitation(result.chunk.notePath));
+    this.addResultAction(
+      actions,
+      "Open in split",
+      () => void this.openInSplit(result.chunk.notePath),
+    );
+    this.addResultAction(actions, "Insert link", () => void this.insertLink(result.chunk.notePath));
+    this.addResultAction(
+      actions,
+      "Copy citation",
+      () => void this.copyCitation(result.chunk.notePath),
+    );
 
     card.addEventListener("click", (event) => {
       if (!(event.target as HTMLElement).hasClass("vaultsleuth-result-action")) {
@@ -425,9 +433,8 @@ export class VaultSleuthView extends ItemView {
   private addCopyAction(parent: HTMLElement, getText: () => string): void {
     const actions = parent.createDiv({ cls: "vaultsleuth-msg-actions" });
     const copy = actions.createSpan({ cls: "vaultsleuth-msg-action", text: "Copy" });
-    copy.addEventListener("click", async () => {
-      await navigator.clipboard.writeText(getText());
-      new Notice("Copied");
+    copy.addEventListener("click", () => {
+      void navigator.clipboard.writeText(getText()).then(() => new Notice("Copied"));
     });
   }
 

@@ -23,9 +23,17 @@ export type HttpClient = (
   init?: { method?: string; headers?: Record<string, string>; body?: string },
 ) => Promise<HttpResponse>;
 
-/** Default client backed by the global `fetch` (Node, tests, non-CORS contexts). */
+/**
+ * Default client for non-Obsidian contexts (Node, the offline eval, and tests).
+ *
+ * The Obsidian plugin never uses this: it always injects the `requestUrl`-backed
+ * `obsidianHttpClient` (see `obsidian/obsidianHttp.ts`), which is required in the
+ * renderer because a plain `fetch` to a local server is blocked by CORS. This
+ * fallback is referenced through `globalThis` so it is clearly the platform
+ * `fetch` used outside the plugin, not a `fetch` call inside it.
+ */
 export const defaultHttpClient: HttpClient = async (url, init) => {
-  const response = await fetch(url, init);
+  const response = await globalThis.fetch(url, init);
   return {
     ok: response.ok,
     status: response.status,

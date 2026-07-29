@@ -379,7 +379,7 @@ export class IndexService {
     let last = performance.now();
     return async () => {
       if (performance.now() - last > UI_YIELD_INTERVAL_MS) {
-        await new Promise<void>((resolve) => setTimeout(resolve));
+        await new Promise<void>((resolve) => window.setTimeout(resolve));
         last = performance.now();
       }
     };

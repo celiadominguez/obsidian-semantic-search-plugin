@@ -241,7 +241,8 @@ export default class VaultSleuthPlugin extends Plugin implements SettingsHost {
   }
 
   public async loadSettings(): Promise<void> {
-    this.settings = Object.assign(defaultSettings(), await this.loadData());
+    const stored = (await this.loadData()) as Partial<VaultSleuthSettings> | null;
+    this.settings = Object.assign(defaultSettings(), stored ?? {});
   }
 
   public async saveSettings(): Promise<void> {
