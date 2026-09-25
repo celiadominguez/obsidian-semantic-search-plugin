@@ -1,8 +1,8 @@
 {
   "id": "vaultsleuth",
   "name": "VaultSleuth",
-  "version": "1.2.3",
-  "minAppVersion": "1.9.0",
+  "version": "1.2.4",
+  "minAppVersion": "1.13.0",
   "description": "Search your vault by meaning and chat with answers cited back to your notes. Embedding and retrieval run fully on-device, so no data leaves your machine by default.",
   "author": "Celia Domínguez",
   "authorUrl": "https://github.com/celiadominguez",

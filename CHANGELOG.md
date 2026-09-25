@@ -4,6 +4,25 @@ All notable changes to VaultSleuth are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.4] - 2026-09-21
+
+### Changed
+
+- **Settings tab migrated to Obsidian's declarative settings API**
+  (`getSettingDefinitions`). Every option is now discoverable through
+  Obsidian's settings search, conditional rows are re-evaluated by the app
+  instead of re-rendering the whole tab, and numeric fields get proper
+  min/max bounds. Model pickers, the dimension probe, masked API keys, and the
+  rebuild action keep their behaviour as custom-rendered rows.
+- **Minimum Obsidian version is now 1.13.0** (the declarative settings API
+  first shipped there). Earlier versions can no longer install this release.
+- The core HTTP transport no longer carries a `fetch`-backed default. Every
+  network call receives an explicit client — the plugin injects Obsidian's
+  `requestUrl`-backed one, and tests inject a stub — so the plugin bundle
+  never references `fetch`.
+- The offline eval CLI writes its report to standard output directly instead
+  of through the console API.
+
 ## [1.2.3] - 2026-07-29
 
 ### Changed
@@ -98,6 +117,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Initial release: on-device semantic + hybrid (BM25) search over an Obsidian
   vault.
 
+[1.2.4]: https://github.com/celiadominguez/obsidian-semantic-search-plugin/releases/tag/1.2.4
 [1.2.3]: https://github.com/celiadominguez/obsidian-semantic-search-plugin/releases/tag/1.2.3
 [1.2.2]: https://github.com/celiadominguez/obsidian-semantic-search-plugin/releases/tag/1.2.2
 [1.2.1]: https://github.com/celiadominguez/obsidian-semantic-search-plugin/releases/tag/1.2.1

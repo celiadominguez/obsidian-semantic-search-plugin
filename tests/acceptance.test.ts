@@ -184,7 +184,11 @@ describe("Hardening acceptance", () => {
     const source = readFileSync(join("src", "obsidian", "SettingsTab.ts"), "utf8");
     const settings: VaultSleuthSettings = defaultSettings();
     for (const key of Object.keys(settings)) {
-      expect(source, `SettingsTab is missing settings.${key}`).toContain(`settings.${key}`);
+      // A key is exposed either as a declaratively bound control (`key: "…"`),
+      // or read/written by a render row (`settings.…` / a quoted key passed to
+      // setControlValue). Either form means the option is reachable in the UI.
+      const bound = source.includes(`"${key}"`) || source.includes(`settings.${key}`);
+      expect(bound, `SettingsTab is missing settings.${key}`).toBe(true);
     }
   });
 

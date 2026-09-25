@@ -20,7 +20,7 @@
  */
 
 import { l2Normalize } from "./embedder";
-import { defaultHttpClient, type HttpClient } from "./http";
+import type { HttpClient } from "./http";
 import type { Embedder, RemoteEmbeddingProtocol } from "./types";
 
 /** Drop a trailing slash so endpoints concatenate cleanly. */
@@ -38,7 +38,7 @@ export interface RemoteEmbedderOptions {
   dim: number;
   /** Optional bearer token, sent only to this endpoint. */
   apiKey?: string;
-  http?: HttpClient;
+  http: HttpClient;
 }
 
 export class RemoteEmbedder implements Embedder {
@@ -60,7 +60,7 @@ export class RemoteEmbedder implements Embedder {
     this.model = options.model;
     this.dim = options.dim;
     this.apiKey = options.apiKey ?? "";
-    this.http = options.http ?? defaultHttpClient;
+    this.http = options.http;
     this.modelId = `remote:${options.protocol}:${this.endpoint}:${options.model}`;
   }
 

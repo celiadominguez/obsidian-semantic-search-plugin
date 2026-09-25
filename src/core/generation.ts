@@ -15,7 +15,7 @@
  * data, not as a command.
  */
 
-import { defaultHttpClient, type HttpClient } from "./http";
+import type { HttpClient } from "./http";
 import { noteBasename } from "./notePath";
 import type { GenerationRequest, Generator, SearchResult, VaultSleuthSettings } from "./types";
 
@@ -146,7 +146,7 @@ export class OllamaGenerator implements Generator {
   constructor(
     private readonly endpoint: string,
     private readonly model: string,
-    private readonly http: HttpClient = defaultHttpClient,
+    private readonly http: HttpClient,
   ) {}
 
   public async generate(request: GenerationRequest): Promise<string> {
@@ -197,8 +197,8 @@ async function openAiChatCompletion(
 /** List model ids from an OpenAI-compatible `/models` endpoint (e.g. LM Studio). */
 export async function listOpenAiModels(
   baseUrl: string,
-  apiKey?: string,
-  http: HttpClient = defaultHttpClient,
+  apiKey: string | undefined,
+  http: HttpClient,
 ): Promise<string[]> {
   const headers: Record<string, string> = {};
   if (apiKey !== undefined && apiKey.length > 0) {
@@ -213,10 +213,7 @@ export async function listOpenAiModels(
 }
 
 /** List installed Ollama model names from its `/api/tags` endpoint. */
-export async function listOllamaModels(
-  endpoint: string,
-  http: HttpClient = defaultHttpClient,
-): Promise<string[]> {
+export async function listOllamaModels(endpoint: string, http: HttpClient): Promise<string[]> {
   const response = await http(`${trimSlash(endpoint)}/api/tags`);
   if (!response.ok) {
     throw new Error(`Listing models failed: ${response.status}`);
@@ -236,7 +233,7 @@ export class LmStudioGenerator implements Generator {
   constructor(
     private readonly endpoint: string,
     private readonly model: string,
-    private readonly http: HttpClient = defaultHttpClient,
+    private readonly http: HttpClient,
   ) {}
 
   public async generate(request: GenerationRequest): Promise<string> {
@@ -257,7 +254,7 @@ export class HostedGenerator implements Generator {
     private readonly endpoint: string,
     private readonly apiKey: string,
     private readonly model: string,
-    private readonly http: HttpClient = defaultHttpClient,
+    private readonly http: HttpClient,
   ) {}
 
   public async generate(request: GenerationRequest): Promise<string> {
@@ -266,10 +263,7 @@ export class HostedGenerator implements Generator {
 }
 
 /** Build the generator selected by the user's settings, using the given HTTP client. */
-export function createGenerator(
-  settings: VaultSleuthSettings,
-  http: HttpClient = defaultHttpClient,
-): Generator {
+export function createGenerator(settings: VaultSleuthSettings, http: HttpClient): Generator {
   switch (settings.generationBackend) {
     case "ollama":
       return new OllamaGenerator(settings.ollamaEndpoint, settings.ollamaModel, http);

@@ -126,7 +126,8 @@ describe("RemoteEmbedder (Ollama)", () => {
 
 describe("modelId", () => {
   it("encodes protocol, endpoint and model so a switch invalidates the index", () => {
-    const base = { endpoint: "http://h/v1", model: "m", dim: 3 };
+    const { http } = stubHttp({});
+    const base = { endpoint: "http://h/v1", model: "m", dim: 3, http };
     const a = new RemoteEmbedder({ ...base, protocol: "openai" }).modelId;
     const b = new RemoteEmbedder({ ...base, protocol: "ollama" }).modelId;
     const c = new RemoteEmbedder({ ...base, protocol: "openai", model: "other" }).modelId;

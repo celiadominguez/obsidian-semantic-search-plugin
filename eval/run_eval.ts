@@ -11,9 +11,6 @@
  * reusable scoring logic lives in `evaluate.ts`; this file is just I/O + the CLI.
  */
 
-/* eslint-disable no-console -- this is a command-line reporter, not plugin code;
-   its console output is the intended interface and never ships in the plugin. */
-
 import { readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { TransformersEmbedder } from "../src/core/embedder";
@@ -36,19 +33,28 @@ import {
   type WikiQaEntry,
 } from "./evaluate";
 
+/**
+ * Write a line to standard output. This is a command-line reporter, so stdout
+ * is its interface; using the stream directly (rather than the console API)
+ * keeps the output where a CLI's belongs and out of any diagnostic console.
+ */
+function out(line: string): void {
+  process.stdout.write(`${line}\n`);
+}
+
 const DEMO_VAULT_DIR = "demo-vault";
 const EVAL_DIR = "eval";
 const RESULTS_DIR = join(EVAL_DIR, "results");
 const SEMANTIC_POOL = 50;
 
 function printSummary(ranking: Record<string, MetricRow>, grounding: GroundingResult): void {
-  console.log("\n=== Retrieval quality (SciFact, @10) ===");
-  console.log("mode      nDCG@10   recall@10");
+  out("\n=== Retrieval quality (SciFact, @10) ===");
+  out("mode      nDCG@10   recall@10");
   for (const [mode, row] of Object.entries(ranking)) {
-    console.log(`${mode.padEnd(9)} ${row.ndcg.toFixed(4)}    ${row.recall.toFixed(4)}`);
+    out(`${mode.padEnd(9)} ${row.ndcg.toFixed(4)}    ${row.recall.toFixed(4)}`);
   }
-  console.log("\n=== Answer grounding (WikiQA) ===");
-  console.log(
+  out("\n=== Answer grounding (WikiQA) ===");
+  out(
     `questions=${grounding.questions}  accuracy@1=${grounding.accuracyAt1.toFixed(4)}  ` +
       `MRR=${grounding.mrr.toFixed(4)}`,
   );
@@ -57,21 +63,21 @@ function printSummary(ranking: Record<string, MetricRow>, grounding: GroundingRe
 async function main(): Promise<void> {
   const modelId = DEFAULT_EMBEDDING_MODEL;
   const { dim, revision } = EMBEDDING_MODELS[modelId];
-  console.log(`Loading embedding model ${modelId}…`);
+  out(`Loading embedding model ${modelId}…`);
   const embedder = new TransformersEmbedder({ modelId, dim, revision });
 
   const files = readdirSync(DEMO_VAULT_DIR).filter((name) => name.endsWith(".md"));
-  console.log(`Indexing ${files.length} notes…`);
+  out(`Indexing ${files.length} notes…`);
   const notes = files.map((fileName) => loadNote(DEMO_VAULT_DIR, fileName));
   const { store, bm25 } = await buildIndex(embedder, notes, {
     chunkTokens: DEFAULT_CHUNK_TOKENS,
     chunkOverlap: DEFAULT_CHUNK_OVERLAP,
   });
-  console.log(`Indexed ${store.size} chunks.`);
+  out(`Indexed ${store.size} chunks.`);
 
   const queryInstruction = EMBEDDING_MODELS[modelId].queryInstruction;
   const qrels = readJsonl<Qrel>(join(EVAL_DIR, "scifact_qrels.jsonl"));
-  console.log(`Scoring ${qrels.length} queries…`);
+  out(`Scoring ${qrels.length} queries…`);
   const ranking = await evaluateAllModes(
     embedder,
     store,
@@ -83,7 +89,7 @@ async function main(): Promise<void> {
   );
 
   const wikiqa = readJsonl<WikiQaEntry>(join(EVAL_DIR, "wikiqa_slice.jsonl"));
-  console.log(`Grounding check over ${wikiqa.length} WikiQA questions…`);
+  out(`Grounding check over ${wikiqa.length} WikiQA questions…`);
   const grounding = await groundingCheck(embedder, wikiqa, queryInstruction);
 
   const metrics = {
@@ -103,7 +109,7 @@ async function main(): Promise<void> {
   writeFileSync(outPath, JSON.stringify(metrics, null, 2), "utf8");
 
   printSummary(ranking, grounding);
-  console.log(`\nWrote ${outPath}`);
+  out(`\nWrote ${outPath}`);
 }
 
 void main();
