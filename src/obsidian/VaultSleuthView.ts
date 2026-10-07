@@ -59,7 +59,7 @@ export class VaultSleuthView extends ItemView {
   }
 
   public getDisplayText(): string {
-    return "VaultSleuth";
+    return "Semantic search";
   }
 
   public getIcon(): string {
@@ -134,9 +134,7 @@ export class VaultSleuthView extends ItemView {
     // branch only fires on an explicit request to enter chat, e.g. the command).
     if (mode === "chat" && !this.chatAvailable()) {
       mode = "search";
-      new Notice(
-        "Chat needs a model — set a local (Ollama / LM Studio) or hosted one in settings.",
-      );
+      new Notice("Chat needs a model. Choose a local or hosted model in settings.");
     }
     // Cancel any pending search so it can't fire against the other mode's input.
     if (this.debounceTimer !== null) {

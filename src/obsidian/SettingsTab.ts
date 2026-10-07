@@ -471,7 +471,7 @@ export class SettingsTab extends PluginSettingTab {
   private renderDimension(setting: Setting): void {
     setting.addText((text) =>
       text
-        .setPlaceholder("e.g. 768")
+        .setPlaceholder("768")
         .setValue(
           this.settings.remoteEmbeddingDim > 0 ? String(this.settings.remoteEmbeddingDim) : "",
         )

@@ -322,10 +322,16 @@ than answered from thin context.
 - **Read-only over your vault.** The plugin only ever writes to its own
   `.obsidian/plugins/vaultsleuth/` data folder (the vector blob and its sidecar).
   It never modifies your notes.
-- **Opt-in network paths.** `ollama` and `lmstudio` send retrieved chunks to a
+- **Opt-in chat backends.** `ollama` and `lmstudio` send retrieved chunks to a
   local server (localhost, on-device); `hosted` sends retrieved chunks to a
-  user-configured endpoint with a user-supplied key. In all cases **only the
+  user-configured endpoint with a user-supplied key. For chat, **only the
   retrieved chunks are sent — never the whole vault or the index**.
+- **Opt-in remote embeddings.** If you set **Embedding source → Remote server**,
+  indexing sends **the text of every indexed note** (as chunks) to the configured
+  embeddings endpoint, and each search query is sent there too. Pointed at
+  localhost (Ollama / LM Studio) this stays on your machine; pointed at a hosted
+  API, your note text leaves your machine. The default on-device source sends
+  nothing.
 - **Key-sync caveat.** A hosted API key is stored in the plugin's settings. If
   you sync your `.obsidian` folder across devices, that key syncs with it; treat
   it accordingly.

@@ -35,11 +35,7 @@ export default class VaultSleuthPlugin extends Plugin implements SettingsHost {
 
     this.registerView(VAULTSLEUTH_VIEW_TYPE, (leaf) => new VaultSleuthView(leaf, this.index));
 
-    this.addRibbonIcon(
-      "settings",
-      "VaultSleuth: search & chat",
-      () => void this.activateView("search"),
-    );
+    this.addRibbonIcon("settings", "Open search and chat", () => void this.activateView("search"));
 
     this.addCommand({
       id: "open-search",
